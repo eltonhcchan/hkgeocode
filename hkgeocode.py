@@ -38,7 +38,35 @@ _LEVELS = (
 COVERAGE_EASTING = ORIGIN_EASTING + _LEVELS[0][0] * _LEVELS[0][1]  # 864000
 COVERAGE_NORTHING = ORIGIN_NORTHING + _LEVELS[0][0] * _LEVELS[0][2]  # 848000
 
+CELL_SIZE_M = {2: 2_000.0, 4: 100.0, 6: 5.0}
+
 _LENGTHS = {2, 4, 6}
+
+
+def coverage_grid_shape(cell_size: float = 100.0) -> tuple[int, int]:
+    """Return (n_cols, n_rows_from_south) for the full HKGeoCode coverage."""
+    n_cols = int(round((COVERAGE_EASTING - ORIGIN_EASTING) / cell_size))
+    n_rows = int(round((COVERAGE_NORTHING - ORIGIN_NORTHING) / cell_size))
+    return n_cols, n_rows
+
+
+def hk80_to_grid_index(
+    easting: float,
+    northing: float,
+    cell_size: float = 100.0,
+) -> tuple[int, int]:
+    """Return (column, row_from_south) of the cell containing the HK80 point.
+
+    Column 0 is the westernmost cell; row 0 is the southernmost cell.
+    """
+    col = math.floor((easting - ORIGIN_EASTING) / cell_size)
+    row = math.floor((northing - ORIGIN_NORTHING) / cell_size)
+    n_cols, n_rows = coverage_grid_shape(cell_size)
+    if not (0 <= col < n_cols and 0 <= row < n_rows):
+        raise HKGeoCodeError(
+            f"HK80 ({easting}, {northing}) is outside HKGeoCode coverage"
+        )
+    return int(col), int(row)
 
 
 class HKGeoCodeError(ValueError):
