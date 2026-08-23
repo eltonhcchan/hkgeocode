@@ -49,9 +49,17 @@ python hkgeocode.py --self-test
 
 `points_to_hkgcode_raster.py` bins point features onto the four-character HKGeoCode grid (100 m × 100 m, EPSG:2326) and writes a GeoTIFF. Pixel (0, 0) is the north-west corner. Empty cells are nodata 0. The raster extent is snapped to HKGeoCode cell edges (use `--full-extent` for the whole 64 km × 48 km coverage).
 
-Depends on `numpy`, `requests`, `tifffile`, `Pillow`, and `pyproj`.
+Depends on `numpy`, `requests`, `tifffile`, `Pillow`, `pyproj`, and `fiona` (File Geodatabase).
 
-Default source is the CSDI [Coordinates of Bus Stops](https://portal.csdi.gov.hk/server/rest/services/common/td_rcd_1638874475129_49745/FeatureServer) layer (HK80, layer `STOP_BUS`):
+The first argument is the point source: an ArcGIS FeatureServer/MapServer URL, or a File Geodatabase (`.gdb`). In both cases the program requires **exactly one point feature layer** (tables are ignored; extra line/polygon layers are rejected).
+
+```text
+python points_to_hkgcode_raster.py https://.../FeatureServer -o output/counts.tif
+python points_to_hkgcode_raster.py https://.../FeatureServer/0 -o output/counts.tif
+python points_to_hkgcode_raster.py path/to/stops.gdb -o output/counts.tif
+```
+
+Default source is the CSDI [Coordinates of Bus Stops](https://portal.csdi.gov.hk/server/rest/services/common/td_rcd_1638874475129_49745/FeatureServer) service (one point layer, `STOP_BUS`):
 
 ```text
 python points_to_hkgcode_raster.py -o output/bus_stops_hkgcode_100m.tif
@@ -92,14 +100,7 @@ From the CSDI layer (4,480 stops, all inside HKGeoCode coverage):
 
 Open the GeoTIFF in QGIS (or similar) on an HK80 basemap. The value of each pixel is the number of stops in that neighbourhood cell.
 
-Other inputs:
-
-```text
-python points_to_hkgcode_raster.py --geojson points.geojson -o output/counts.tif
-python points_to_hkgcode_raster.py --csdi-url <FeatureLayerURL> --length 4
-```
-
-`--length 2` or `6` bins to 2 km or 5 m cells instead of 100 m.
+`--length 2` or `6` bins to 2 km or 5 m cells instead of 100 m. Coordinates are requested or reprojected to EPSG:2326 before binning.
 
 ## Conversion formula
 
