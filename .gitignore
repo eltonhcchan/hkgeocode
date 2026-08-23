@@ -1,0 +1,4 @@
+# CPython bytecode — regenerate locally; do not version
+__pycache__/
+*.py[cod]
+*$py.class

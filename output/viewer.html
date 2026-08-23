@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Bus stops on HKGeoCode 100 m grid</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    html, body, #map { margin: 0; height: 100%; font-family: sans-serif; }
+    .panel {
+      position: absolute; z-index: 1000; top: 12px; right: 12px;
+      background: #fff; padding: 12px 14px; border: 1px solid #ccc;
+      max-width: 280px; font-size: 13px; line-height: 1.4;
+    }
+    .panel h1 { font-size: 15px; margin: 0 0 8px; }
+    .legend {
+      display: flex; flex-wrap: wrap; gap: 8px 12px; margin: 10px 0 8px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .swatch {
+      width: 14px; height: 14px; border: 1px solid #888; display: inline-block;
+    }
+    .leaflet-tile-pane { filter: grayscale(100%); }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="panel">
+    <h1>Bus stop count / 100 m cell</h1>
+    <div>CSDI Transport Department stops, binned to HKGeoCode neighbourhood cells (EPSG:2326).</div>
+    <div class="legend"><div class="legend-item"><span class="swatch" style="background:rgba(255,255,178,0.82)"></span>1</div>
+<div class="legend-item"><span class="swatch" style="background:rgba(254,217,118,0.86)"></span>2</div>
+<div class="legend-item"><span class="swatch" style="background:rgba(254,178,76,0.88)"></span>3</div>
+<div class="legend-item"><span class="swatch" style="background:rgba(253,141,60,0.90)"></span>4</div>
+<div class="legend-item"><span class="swatch" style="background:rgba(240,59,32,0.92)"></span>5</div>
+<div class="legend-item"><span class="swatch" style="background:rgba(189,0,38,0.94)"></span>6</div></div>
+    <p>
+      4,480 stops in 3,548 cells
+      (max 6 per cell).
+    </p>
+  </div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map("map").setView([22.378862, 114.099408], 11);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap"
+    }).addTo(map);
+    const overlay = L.imageOverlay("bus_stops_hkgcode_100m.png", [
+      [22.20400900, 113.86121312],
+      [22.55371448, 114.33760300]
+    ], { opacity: 1, interactive: true });
+    overlay.addTo(map);
+    map.fitBounds(overlay.getBounds());
+  </script>
+</body>
+</html>
