@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Bus stops on HKGeoCode 100 m grid</title>
+  <title>Points on HKGeoCode 100 m grid</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
     html, body, #map { margin: 0; height: 100%; font-family: sans-serif; }
@@ -25,29 +25,44 @@
 <body>
   <div id="map"></div>
   <div class="panel">
-    <h1>Bus stop count / 100 m cell</h1>
-    <div>CSDI Transport Department stops, binned to HKGeoCode neighbourhood cells (EPSG:2326).</div>
+    <h1>Point count / 100 m cell</h1>
+    <div>Points binned to HKGeoCode neighbourhood cells (EPSG:2326).</div>
     <div class="legend"><div class="legend-item"><span class="swatch" style="background:rgba(255,255,178,0.82)"></span>1</div>
 <div class="legend-item"><span class="swatch" style="background:rgba(254,217,118,0.86)"></span>2</div>
 <div class="legend-item"><span class="swatch" style="background:rgba(254,178,76,0.88)"></span>3</div>
 <div class="legend-item"><span class="swatch" style="background:rgba(253,141,60,0.90)"></span>4</div>
 <div class="legend-item"><span class="swatch" style="background:rgba(240,59,32,0.92)"></span>5</div>
-<div class="legend-item"><span class="swatch" style="background:rgba(189,0,38,0.94)"></span>6</div></div>
+<div class="legend-item"><span class="swatch" style="background:rgba(189,0,38,0.94)"></span>6</div>
+<div class="legend-item"><span class="swatch" style="background:rgba(189,0,38,0.94)"></span>7</div>
+<div class="legend-item"><span class="swatch" style="background:rgba(189,0,38,0.94)"></span>8</div>
+<div class="legend-item"><span class="swatch" style="background:rgba(189,0,38,0.94)"></span>9</div>
+<div class="legend-item"><span class="swatch" style="background:rgba(189,0,38,0.94)"></span>10</div>
+<div class="legend-item"><span class="swatch" style="background:rgba(189,0,38,0.94)"></span>11</div>
+<div class="legend-item"><span class="swatch" style="background:rgba(189,0,38,0.94)"></span>12</div>
+<div class="legend-item"><span class="swatch" style="background:rgba(189,0,38,0.94)"></span>13</div>
+<div class="legend-item"><span class="swatch" style="background:rgba(189,0,38,0.94)"></span>14</div>
+<div class="legend-item"><span class="swatch" style="background:rgba(189,0,38,0.94)"></span>15</div>
+<div class="legend-item"><span class="swatch" style="background:rgba(189,0,38,0.94)"></span>16</div>
+<div class="legend-item"><span class="swatch" style="background:rgba(189,0,38,0.94)"></span>17</div>
+<div class="legend-item"><span class="swatch" style="background:rgba(189,0,38,0.94)"></span>18</div>
+<div class="legend-item"><span class="swatch" style="background:rgba(189,0,38,0.94)"></span>19</div>
+<div class="legend-item"><span class="swatch" style="background:rgba(189,0,38,0.94)"></span>20</div>
+<div class="legend-item"><span class="swatch" style="background:rgba(189,0,38,0.94)"></span>21</div></div>
     <p>
-      4,480 stops in 3,548 cells
-      (max 6 per cell).
+      2,030 points in 1,541 cells
+      (max 21 per cell).
     </p>
   </div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    const map = L.map("map").setView([22.378862, 114.099408], 11);
+    const map = L.map("map").setView([22.373905, 114.092122], 11);
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
       attribution: "&copy; OpenStreetMap"
     }).addTo(map);
-    const overlay = L.imageOverlay("bus_stops_hkgcode_100m.png", [
-      [22.20400900, 113.86121312],
-      [22.55371448, 114.33760300]
+    const overlay = L.imageOverlay("fehd.png", [
+      [22.20401274, 113.86318000],
+      [22.54379681, 114.32106486]
     ], { opacity: 1, interactive: true });
     overlay.addTo(map);
     map.fitBounds(overlay.getBounds());

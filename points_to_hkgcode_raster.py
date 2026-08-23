@@ -10,9 +10,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
+from urllib.parse import urlparse, urlunparse
 
+import fiona
 import numpy as np
 import requests
 import tifffile
@@ -33,25 +36,122 @@ from hkgeocode import (
 
 CSDI_BUS_STOPS = (
     "https://portal.csdi.gov.hk/server/rest/services/common/"
-    "td_rcd_1638874475129_49745/FeatureServer/0"
+    "td_rcd_1638874475129_49745/FeatureServer"
 )
 NODATA = 0
 EPSG = 2326
 PAGE_SIZE = 3000
+USER_AGENT = "hkgeocode/0.1"
+
+_ARCGIS_SERVICE = re.compile(
+    r"(?P<base>.+/(?:FeatureServer|MapServer))(?:/(?P<layer>\d+))?/?$",
+    re.IGNORECASE,
+)
+_FIONA_POINT = {
+    "Point",
+    "3D Point",
+    "PointZ",
+    "Point25D",
+    "MultiPoint",
+    "3D MultiPoint",
+    "MultiPointZ",
+    "MultiPoint25D",
+}
+_ESRI_POINT = {"esriGeometryPoint", "esriGeometryMultipoint"}
 
 
-def fetch_arcgis_points(layer_url: str) -> list[tuple[float, float]]:
-    """Download all point geometries from an ArcGIS Feature Layer in EPSG:2326."""
+class PointLayerError(ValueError):
+    """Raised when the source is not exactly one point feature layer."""
+
+
+def _http_session() -> requests.Session:
     session = requests.Session()
-    session.headers["User-Agent"] = "hkgeocode/0.1"
+    session.headers["User-Agent"] = USER_AGENT
+    return session
+
+
+def _arcgis_json(session: requests.Session, url: str) -> dict:
+    resp = session.get(url, params={"f": "json"}, timeout=60)
+    resp.raise_for_status()
+    payload = resp.json()
+    if "error" in payload:
+        raise PointLayerError(payload["error"])
+    return payload
+
+
+def _parse_arcgis_url(url: str) -> tuple[str, int | None]:
+    parsed = urlparse(url.strip())
+    path = parsed.path.rstrip("/")
+    match = _ARCGIS_SERVICE.search(path)
+    if not match:
+        raise PointLayerError(
+            f"{url!r} is not an ArcGIS FeatureServer or MapServer URL"
+        )
+    layer_id = int(match.group("layer")) if match.group("layer") is not None else None
+    service = urlunparse(parsed._replace(path=match.group("base"), query="", fragment=""))
+    return service.rstrip("/"), layer_id
+
+
+def _require_single_point_layer(layers: list[tuple[str, str]], source: str) -> None:
+    """layers is a list of (name, geometry_label) spatial feature layers."""
+    point_layers = [
+        name
+        for name, geom in layers
+        if geom in _ESRI_POINT or geom in _FIONA_POINT
+    ]
+    listing = ", ".join(f"{name} ({geom})" for name, geom in layers) or "none"
+    if len(layers) != 1 or len(point_layers) != 1:
+        raise PointLayerError(
+            f"{source} must contain a single point feature layer; "
+            f"found {len(layers)} feature layer(s): {listing}"
+        )
+
+
+def _resolve_arcgis_layer_url(url: str) -> str:
+    session = _http_session()
+    service_url, layer_id = _parse_arcgis_url(url)
+    service = _arcgis_json(session, service_url)
+    spatial = []
+    for lyr in service.get("layers") or []:
+        if lyr.get("subLayerIds"):
+            continue
+        geom = lyr.get("geometryType")
+        if not geom:
+            continue
+        spatial.append((str(lyr.get("name", lyr.get("id"))), geom, int(lyr["id"])))
+    if layer_id is None:
+        _require_single_point_layer([(name, geom) for name, geom, _ in spatial], url)
+        layer_id = spatial[0][2]
+    else:
+        match = next((item for item in spatial if item[2] == layer_id), None)
+        if match is None:
+            layer = _arcgis_json(session, f"{service_url}/{layer_id}")
+            geom = layer.get("geometryType", "unknown")
+            name = str(layer.get("name", layer_id))
+        else:
+            name, geom, _ = match
+        if geom not in _ESRI_POINT:
+            raise PointLayerError(
+                f"{url} layer {layer_id} ({name}) is {geom}, not a point layer"
+            )
+    return f"{service_url}/{layer_id}"
+
+
+def fetch_arcgis_points(source_url: str) -> list[tuple[float, float]]:
+    """Download points from an ArcGIS service or layer URL, in EPSG:2326."""
+    layer_url = _resolve_arcgis_layer_url(source_url)
+    session = _http_session()
     count_resp = session.get(
         f"{layer_url}/query",
         params={"where": "1=1", "returnCountOnly": "true", "f": "json"},
         timeout=60,
     )
     count_resp.raise_for_status()
-    expected = int(count_resp.json().get("count", 0))
-    print(f"CSDI layer reports {expected} features", file=sys.stderr)
+    count_payload = count_resp.json()
+    if "error" in count_payload:
+        raise PointLayerError(count_payload["error"])
+    expected = int(count_payload.get("count", 0))
+    print(f"ArcGIS layer reports {expected} features", file=sys.stderr)
 
     points: list[tuple[float, float]] = []
     offset = 0
@@ -60,7 +160,7 @@ def fetch_arcgis_points(layer_url: str) -> list[tuple[float, float]]:
             f"{layer_url}/query",
             params={
                 "where": "1=1",
-                "outFields": "OBJECTID",
+                "outFields": "*",
                 "returnGeometry": "true",
                 "outSR": str(EPSG),
                 "f": "json",
@@ -72,7 +172,7 @@ def fetch_arcgis_points(layer_url: str) -> list[tuple[float, float]]:
         resp.raise_for_status()
         payload = resp.json()
         if "error" in payload:
-            raise RuntimeError(payload["error"])
+            raise PointLayerError(payload["error"])
         features = payload.get("features") or []
         if not features:
             break
@@ -80,6 +180,8 @@ def fetch_arcgis_points(layer_url: str) -> list[tuple[float, float]]:
             geom = feat.get("geometry") or {}
             if "x" in geom and "y" in geom:
                 points.append((float(geom["x"]), float(geom["y"])))
+            for pt in geom.get("points") or []:
+                points.append((float(pt[0]), float(pt[1])))
         offset += len(features)
         print(f"downloaded {offset} / {expected or '?'}", file=sys.stderr)
         if expected and offset >= expected:
@@ -87,6 +189,80 @@ def fetch_arcgis_points(layer_url: str) -> list[tuple[float, float]]:
         if len(features) < PAGE_SIZE and not payload.get("exceededTransferLimit"):
             break
     return points
+
+
+def _fiona_geometry_label(src: fiona.Collection) -> str | None:
+    geom = src.schema.get("geometry")
+    if geom in (None, "None", "Unknown"):
+        return None
+    return str(geom)
+
+
+def _to_hk80(
+    coords: list[tuple[float, float]], crs
+) -> list[tuple[float, float]]:
+    if not coords:
+        return []
+    if crs is None:
+        print("warning: layer has no CRS; assuming EPSG:2326", file=sys.stderr)
+        return coords
+    try:
+        epsg = crs.to_epsg() if hasattr(crs, "to_epsg") else None
+    except Exception:
+        epsg = None
+    if epsg == EPSG:
+        return coords
+    source_crs = f"EPSG:{epsg}" if epsg else (getattr(crs, "to_wkt", lambda: crs)())
+    transformer = Transformer.from_crs(source_crs, f"EPSG:{EPSG}", always_xy=True)
+    xs, ys = zip(*coords)
+    east, north = transformer.transform(xs, ys)
+    return list(zip((float(x) for x in east), (float(y) for y in north)))
+
+
+def fetch_fgdb_points(gdb_path: Path) -> list[tuple[float, float]]:
+    """Read points from a File Geodatabase that has a single point layer."""
+    if not gdb_path.exists():
+        raise PointLayerError(f"File Geodatabase not found: {gdb_path}")
+    try:
+        names = fiona.listlayers(gdb_path)
+    except Exception as exc:
+        raise PointLayerError(f"cannot open File Geodatabase {gdb_path}: {exc}") from exc
+
+    spatial: list[tuple[str, str]] = []
+    for name in names:
+        with fiona.open(gdb_path, layer=name) as src:
+            geom = _fiona_geometry_label(src)
+            if geom is not None:
+                spatial.append((name, geom))
+    _require_single_point_layer(spatial, str(gdb_path))
+    layer_name = spatial[0][0]
+
+    raw: list[tuple[float, float]] = []
+    with fiona.open(gdb_path, layer=layer_name) as src:
+        crs = src.crs
+        for feat in src:
+            geom = feat.get("geometry") or {}
+            gtype = geom.get("type")
+            coords = geom.get("coordinates") or []
+            if gtype == "Point" and coords:
+                raw.append((float(coords[0]), float(coords[1])))
+            elif gtype == "MultiPoint":
+                for pt in coords:
+                    raw.append((float(pt[0]), float(pt[1])))
+    print(f"read {len(raw)} points from {gdb_path} layer {layer_name!r}", file=sys.stderr)
+    return _to_hk80(raw, crs)
+
+
+def load_points(source: str) -> list[tuple[float, float]]:
+    """Load HK80 points from an ArcGIS REST URL or a File Geodatabase."""
+    if source.lower().startswith(("http://", "https://")):
+        return fetch_arcgis_points(source)
+    path = Path(source)
+    if path.suffix.lower() == ".gdb" or path.name.lower().endswith(".gdb"):
+        return fetch_fgdb_points(path)
+    raise PointLayerError(
+        f"{source!r} must be an ArcGIS FeatureServer/MapServer URL or a .gdb path"
+    )
 
 
 def rasterize_points(
@@ -286,7 +462,7 @@ def write_viewer(
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Bus stops on HKGeoCode 100 m grid</title>
+  <title>Points on HKGeoCode 100 m grid</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
     html, body, #map {{ margin: 0; height: 100%; font-family: sans-serif; }}
@@ -309,11 +485,11 @@ def write_viewer(
 <body>
   <div id="map"></div>
   <div class="panel">
-    <h1>Bus stop count / 100 m cell</h1>
-    <div>CSDI Transport Department stops, binned to HKGeoCode neighbourhood cells (EPSG:2326).</div>
+    <h1>Point count / 100 m cell</h1>
+    <div>Points binned to HKGeoCode neighbourhood cells (EPSG:2326).</div>
     <div class="legend">{legend_items}</div>
     <p>
-      {stats["binned"]:,} stops in {stats["occupied_cells"]:,} cells
+      {stats["binned"]:,} points in {stats["occupied_cells"]:,} cells
       (max {stats["max_count"]} per cell).
     </p>
   </div>
@@ -343,20 +519,20 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         description="Aggregate points onto the HKGeoCode 100 m grid as a GeoTIFF."
     )
     parser.add_argument(
-        "--csdi-url",
+        "source",
+        nargs="?",
         default=CSDI_BUS_STOPS,
-        help="ArcGIS Feature Layer URL (default: CSDI bus stops)",
-    )
-    parser.add_argument(
-        "--geojson",
-        type=Path,
-        help="optional GeoJSON of points already in EPSG:2326 (skips download)",
+        help=(
+            "point layer: ArcGIS FeatureServer/MapServer URL, or File Geodatabase "
+            "(.gdb). Must contain a single point feature layer. "
+            "Default: CSDI bus stops FeatureServer"
+        ),
     )
     parser.add_argument(
         "-o",
         "--output",
         type=Path,
-        default=Path("output/bus_stops_hkgcode_100m.tif"),
+        default=Path("output/points_hkgcode_100m.tif"),
         help="output GeoTIFF path",
     )
     parser.add_argument(
@@ -379,27 +555,15 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _points_from_geojson(path: Path) -> list[tuple[float, float]]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    points: list[tuple[float, float]] = []
-    features = payload.get("features") if isinstance(payload, dict) else payload
-    for feat in features or []:
-        geom = feat.get("geometry") or {}
-        if geom.get("type") == "Point":
-            x, y = geom["coordinates"][:2]
-            points.append((float(x), float(y)))
-    return points
-
-
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     cell_size = CELL_SIZE_M[args.length]
-    if args.geojson:
-        points = _points_from_geojson(args.geojson)
-        print(f"read {len(points)} points from {args.geojson}", file=sys.stderr)
-    else:
-        points = fetch_arcgis_points(args.csdi_url.rstrip("/"))
-        print(f"downloaded {len(points)} points", file=sys.stderr)
+    try:
+        points = load_points(args.source)
+    except PointLayerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(f"loaded {len(points)} points from {args.source}", file=sys.stderr)
 
     counts, west, north, stats = rasterize_points(
         points, cell_size=cell_size, full_extent=args.full_extent
