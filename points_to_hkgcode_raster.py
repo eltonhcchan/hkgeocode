@@ -419,7 +419,7 @@ def main(argv: list[str] | None = None) -> int:
         None,
     )
     if sample:
-        print(f"example {args.length}-char cell: {sample}", file=sys.stderr)
+        print(f"example {len(sample)}-char cell: {sample}", file=sys.stderr)
 
     if not args.no_viewer:
         png_path = args.output.with_suffix(".png")
