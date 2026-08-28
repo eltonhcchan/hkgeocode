@@ -45,6 +45,16 @@ Run the built-in checks (Wikipedia examples plus the Sharp Peak sheet):
 python hkgeocode.py --self-test
 ```
 
+## Map explorer
+
+`explorer.html` is an H3-style click explorer. It draws **only cells that intersect the current map view** (up to 12,000). Turn on **All cell boundaries at selected level** to outline every in-view cell at 2 km / 100 m / 5 m, and **Identifiers at cell centres** to label every one of those cells on a canvas overlay. Each identifier stays on the visible part of its cell while you pan, so labels do not vanish when the geographic centre leaves the viewport. Parent, neighbour, and child outlines are clipped the same way.
+
+```text
+python -m http.server 8765
+```
+
+Then open http://127.0.0.1:8765/explorer.html (or `#code=H8FB2H`). Click a location to select a cell; use the panel for parent, **neighbours** (up to eight adjacent cells in view), children-in-view, and resolution (2 km, 100 m, 5 m, or auto by zoom). **Fit cell** (or going to a code) zooms until the selected cell fills the view, including 100 m cells (the map can overzoom OSM tiles to zoom 22). **Reset** clears the selection. The panel footer shows the HKGeoCode under the pointer. **Basemap** defaults to the Lands Department topographic map (colour) with Traditional Chinese labels; **LandsD grey** is the same tiles in greyscale, and **OpenStreetMap** is colour OSM (WGS84 XYZ twins of the HK80 vector-tile services overlay the Web Mercator grid).
+
 ## Points to 100 m raster
 
 `points_to_hkgcode_raster.py` bins point features onto the four-character HKGeoCode grid (100 m × 100 m, EPSG:2326) and writes a GeoTIFF. Pixel (0, 0) is the north-west corner. Empty cells are nodata 0. The raster extent is snapped to HKGeoCode cell edges (use `--full-extent` for the whole 64 km × 48 km coverage).
