@@ -46,7 +46,9 @@ python hkgeocode.py --self-test
 
 ## Map explorer
 
-`explorer.html` is an H3-style click explorer. It draws **only cells that intersect the current map view** (up to 12,000). Turn on **All cell boundaries at selected level** to outline every in-view cell at 2 km / 100 m / 5 m, and **Identifiers at cell centres** to label every one of those cells on a canvas overlay. Each identifier stays on the visible part of its cell while you pan, so labels do not vanish when the geographic centre leaves the viewport. Parent, neighbour, and child outlines are clipped the same way.
+`explorer.html` is hkgeocode explorer. It draws **only cells that intersect the current map view** (up to 12,000). Turn on **All cell boundaries at selected level** to outline every in-view cell at 2 km / 100 m / 5 m, and **Identifiers at cell centres** to label every one of those cells on a canvas overlay. Each identifier stays on the visible part of its cell while you pan, so labels do not vanish when the geographic centre leaves the viewport. Parent, neighbour, and child outlines are clipped the same way.
+
+Click [here](https://eltonhcchan.github.io/hkgeocode/) to try.
 
 ```text
 python -m http.server 8765
