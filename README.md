@@ -1,6 +1,6 @@
 # HKGCode or Hong Kong Geocode
 
-HKGCode or Hong Kong Geocode, is a public geocode from the Survey and Mapping Office, Lands Department. It is derived from the HK1980 grid system, i.e. EPSG:2326, a projected coordinate system covering Hong Kong region only. In other word, it is a local grid system and HKGCode inherits the same. This code is six Crockford Base32 characters (0–9 and A–Z, excluding I, L, O and U) in three nested layers:
+HKGCode or Hong Kong Geocode, is a public geocode from the Survey and Mapping Office, Lands Department and details can be found in [wikipedia](https://zh.wikipedia.org/wiki/%E9%A6%99%E6%B8%AF%E5%9C%B0%E7%90%86%E7%A2%BC). Acoording to the wiki, it is a new geocode and is derived from the HK1980 grid system, i.e. EPSG:2326, a projected coordinate system covering Hong Kong region only. In other words, it is a local grid system, and HKGCode inherits the same. This code is six Crockford Base32 characters (0–9 and A–Z, excluding I, L, O and U) in three nested layers:
 
 | Layer | Characters | Cell size | Grid |
 | --- | --- | --- | --- |
@@ -124,4 +124,4 @@ For HK80 easting *E* and northing *N* (metres):
 
 The code is the Crockford character for x₁ y₁ x₂ y₂ x₃ y₃.
 
-This encoding follows the [Wikipedia definition](https://zh.wikipedia.org/zh-hk/%E9%A6%99%E6%B8%AF%E5%9C%B0%E7%90%86%E7%A2%BC). Lands Department is expected to publish an official generation API; use that service when an official code is required.
+This encoding follows the [Wikipedia definition](https://zh.wikipedia.org/zh-hk/%E9%A6%99%E6%B8%AF%E5%9C%B0%E7%90%86%E7%A2%BC).
