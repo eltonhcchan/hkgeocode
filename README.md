@@ -11,9 +11,9 @@ HKGCode or Hong Kong Geocode, is a public geocode from the Survey and Mapping Of
 The south-west origin is easting **800000 m**, northing **800000 m** (EPSG:2326). Coverage is 64 km east by 48 km north. The south-west large cell is `00`; the north-east large cell is `ZQ`. Each pair of characters is the easting index then the northing index.
 
 
-## Convert HK1980 grid easing and northing to hkgeocode
+## Convert HK1980 grid easting and northing to hkgeocode
 Convert [Hong Kong 1980 Grid](https://www.geodetic.gov.hk/en/gi/refdoc.htm) easting and northing to [HKGeoCode](https://zh.wikipedia.org/zh-hk/%E9%A6%99%E6%B8%AF%E5%9C%B0%E7%90%86%E7%A2%BC) (香港地理碼 / HKGCode), and bin point features onto the 100 m HKGeoCode grid as a GeoTIFF.
-`hkgeocode.py` needs Python 3.9+ and the standard library only.
+`hkgeocode.py` requires Python 3.9+ and only the standard library.
 
 ```text
 python hkgeocode.py EASTING NORTHING
@@ -46,9 +46,9 @@ python hkgeocode.py --self-test
 
 ## Map explorer
 
-`explorer.html` is hkgeocode explorer. It draws **only cells that intersect the current map view** (up to 12,000). Turn on **All cell boundaries at selected level** to outline every in-view cell at 2 km / 100 m / 5 m, and **Identifiers at cell centres** to label every one of those cells on a canvas overlay. Each identifier stays on the visible part of its cell while you pan, so labels do not vanish when the geographic centre leaves the viewport. Parent, neighbour, and child outlines are clipped the same way.
+`explorer.html` is a hkgeocode explorer. It draws **only cells that intersect the current map view** (up to 12,000). Turn on **All cell boundaries at selected level** to outline every in-view cell at 2 km / 100 m / 5 m, and **Identifiers at cell centres** to label every one of those cells on a canvas overlay. Each identifier stays on the visible part of its cell while you pan, so labels do not vanish when the geographic centre leaves the viewport. Parent, neighbour, and child outlines are clipped the same way.
 
-Click [here](https://eltonhcchan.github.io/hkgeocode/) to try.
+Click [here](https://eltonhcchan.github.io/hkgeocode/) to try it now.
 
 ```text
 python -m http.server 8765
