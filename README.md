@@ -54,7 +54,9 @@ Click [here](https://eltonhcchan.github.io/hkgeocode/) to try it now.
 python -m http.server 8765
 ```
 
-Then open http://127.0.0.1:8765/explorer.html (or `#code=H8FB2H`). Click a location to select a cell; use the panel for parent, **neighbours** (up to eight adjacent cells in view), children-in-view, and resolution (2 km, 100 m, 5 m, or auto by zoom). **Fit cell** (or going to a code) zooms until the selected cell fills the view, including 100 m cells (the map can overzoom OSM tiles to zoom 22). **Reset** clears the selection. The panel footer shows the HKGeoCode under the pointer. **Basemap** defaults to the Lands Department topographic map (colour) with Traditional Chinese labels; **LandsD grey** is the same tiles in greyscale, and **OpenStreetMap** is colour OSM (WGS84 XYZ twins of the HK80 vector-tile services overlay the Web Mercator grid).
+Then open http://127.0.0.1:8765/explorer.html (or `#code=H8FB2H`). Click a location to select a cell; use the panel for parent, **neighbours** (up to eight adjacent cells in view), children-in-view, and resolution (2 km, 100 m, 5 m, or auto by zoom). **Fit cell** (or going to a code) zooms until the selected cell fills the view, including 100 m cells (the map can overzoom OSM tiles to zoom 22). **Reset** clears the selection. The panel footer shows the HKGeoCode under the pointer. **Basemap** defaults to the Lands Department topographic map (colour) with Traditional Chinese labels; **LandsD grey** is the same tiles in greyscale, **OpenStreetMap** is colour OSM, and **Esri Open Streets** is Esri World Street Map (WGS84 XYZ twins of the HK80 vector-tile services overlay the Web Mercator grid).
+
+**Polygon to cells** loads an Esri FeatureServer/MapServer polygon layer from a REST URL. The explorer checks that the layer is polygon geometry (errors go to the panel console). Choose a **classification field**, then turn the mode on: a cell is included only if its **centroid** falls inside a polygon, so cells never overlap or double-count. Polygons draw on top of the grid; cells and polygons that share an attribute value use the same colour.
 
 ## Points to 100 m raster
 
