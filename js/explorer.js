@@ -38,6 +38,12 @@
     copy: document.getElementById("copy-code"),
     clear: document.getElementById("clear-cell"),
     hover: document.getElementById("hover-code"),
+    polyCells: document.getElementById("poly-cells"),
+    esriUrl: document.getElementById("esri-layer-url"),
+    loadEsri: document.getElementById("load-esri-layer"),
+    classField: document.getElementById("class-field"),
+    classLegend: document.getElementById("class-legend"),
+    console: document.getElementById("message-console"),
   };
 
   const map = L.map("map", {
@@ -59,6 +65,15 @@
     maxZoom: MAP_MAX_ZOOM,
     attribution: "&copy; OpenStreetMap",
   });
+  const esriStreetsLayer = L.tileLayer(
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+    {
+      maxNativeZoom: TILE_NATIVE_ZOOM,
+      maxZoom: MAP_MAX_ZOOM,
+      attribution:
+        "Tiles &copy; <a href='https://www.esri.com/' target='_blank' rel='noopener'>Esri</a> &mdash; Esri, TomTom, Garmin, FAO, NOAA, USGS, OpenStreetMap contributors, and the GIS User Community",
+    }
+  );
 
   map.createPane("landsdLabel");
   const labelPane = map.getPane("landsdLabel");
@@ -99,32 +114,24 @@
     document.body.classList.toggle("basemap-landsd", useLandsd);
     map.getContainer().classList.toggle("basemap-landsd", useLandsd);
     map.getContainer().classList.toggle("basemap-landsd-grey", id === "landsd-grey");
+
+    [osmLayer, esriStreetsLayer, landsdBaseLayer, landsdLabelLayer].forEach((layer) => {
+      if (map.hasLayer(layer)) {
+        map.removeLayer(layer);
+      }
+    });
+    if (landsdLogoControl._map) {
+      map.removeControl(landsdLogoControl);
+    }
+
     if (useLandsd) {
-      if (map.hasLayer(osmLayer)) {
-        map.removeLayer(osmLayer);
-      }
-      if (!map.hasLayer(landsdBaseLayer)) {
-        landsdBaseLayer.addTo(map);
-      }
-      if (!map.hasLayer(landsdLabelLayer)) {
-        landsdLabelLayer.addTo(map);
-      }
-      if (!landsdLogoControl._map) {
-        landsdLogoControl.addTo(map);
-      }
+      landsdBaseLayer.addTo(map);
+      landsdLabelLayer.addTo(map);
+      landsdLogoControl.addTo(map);
+    } else if (id === "esri-streets") {
+      esriStreetsLayer.addTo(map);
     } else {
-      if (map.hasLayer(landsdBaseLayer)) {
-        map.removeLayer(landsdBaseLayer);
-      }
-      if (map.hasLayer(landsdLabelLayer)) {
-        map.removeLayer(landsdLabelLayer);
-      }
-      if (landsdLogoControl._map) {
-        map.removeControl(landsdLogoControl);
-      }
-      if (!map.hasLayer(osmLayer)) {
-        osmLayer.addTo(map);
-      }
+      osmLayer.addTo(map);
     }
   }
 
@@ -132,6 +139,10 @@
   const gridPane = map.getPane("hkgGrid");
   gridPane.style.zIndex = "350";
   gridPane.style.pointerEvents = "none";
+
+  map.createPane("hkgPolygons");
+  const polygonPane = map.getPane("hkgPolygons");
+  polygonPane.style.zIndex = "400";
 
   const canvasRenderer = L.canvas({ padding: 0.4 });
   const parentLayer = L.layerGroup().addTo(map);
@@ -141,6 +152,7 @@
 
   let selected = null;
   let extraLabelCodes = [];
+  let cellFillByCode = {};
 
   function toHk80(latlng) {
     return proj4("EPSG:4326", "EPSG:2326", [latlng.lng, latlng.lat]);
@@ -349,7 +361,8 @@
       );
       const showGrid = els.showGrid.checked;
       const showLabels = els.showLabels.checked;
-      if ((!showGrid && !showLabels) || codes.length > MAX_GRID_CELLS) {
+      const showFills = Object.keys(cellFillByCode).length > 0;
+      if ((!showGrid && !showLabels && !showFills) || codes.length > MAX_GRID_CELLS) {
         this._lastCount = codes.length;
         this._tooMany = codes.length > MAX_GRID_CELLS;
         return;
@@ -357,24 +370,30 @@
       this._tooMany = false;
       this._lastCount = codes.length;
 
-      ctx.lineJoin = "miter";
+      ctx.lineJoin = "round";
       ctx.strokeStyle = "#111";
       ctx.lineWidth = 1.5;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.lineJoin = "round";
 
       const toPoint = (latlng) => leafletMap.latLngToContainerPoint(latlng);
 
       codes.forEach((code) => {
         const ring = cellLatLngs(code).map(toPoint);
+        const fill = cellFillByCode[code];
+        ctx.beginPath();
+        ctx.moveTo(ring[0].x, ring[0].y);
+        for (let i = 1; i < ring.length; i += 1) {
+          ctx.lineTo(ring[i].x, ring[i].y);
+        }
+        ctx.closePath();
+        if (fill) {
+          ctx.fillStyle = fill.color;
+          ctx.globalAlpha = 0.55;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
         if (showGrid) {
-          ctx.beginPath();
-          ctx.moveTo(ring[0].x, ring[0].y);
-          for (let i = 1; i < ring.length; i += 1) {
-            ctx.lineTo(ring[i].x, ring[i].y);
-          }
-          ctx.closePath();
           ctx.stroke();
         }
         if (showLabels) {
@@ -409,6 +428,240 @@
 
   const viewCanvas = new CellViewCanvas();
   map.addLayer(viewCanvas);
+
+  const POLY = window.HKGPolygonCells;
+  const polygonLayer = L.geoJSON(null, {
+    pane: "hkgPolygons",
+    style: function styleFeature(feature) {
+      const field = els.classField.value;
+      const value = feature.properties ? feature.properties[field] : null;
+      const { color } = POLY.colorForValue(value, polygonColorByValue);
+      return {
+        color,
+        weight: 2,
+        fillColor: color,
+        fillOpacity: 0.22,
+      };
+    },
+    onEachFeature: function onEachFeature(feature, layer) {
+      const field = els.classField.value;
+      const value = feature.properties ? feature.properties[field] : "";
+      if (value !== "" && value != null) {
+        layer.bindTooltip(String(value), { sticky: true });
+      }
+      layer.on("click", (event) => {
+        L.DomEvent.stopPropagation(event);
+        try {
+          const [easting, northing] = toHk80(event.latlng);
+          selectCode(HKG.hk80ToHkgeocode(easting, northing, currentLength()));
+        } catch (err) {
+          if (err instanceof HKG.HKGeoCodeError) {
+            els.status.textContent = "Click is outside HKGeoCode coverage.";
+          } else {
+            throw err;
+          }
+        }
+      });
+    },
+  }).addTo(map);
+
+  let polygonLayerInfo = null;
+  let polygonFeatures = [];
+  let polygonColorByValue = new Map();
+  let polygonRequestId = 0;
+
+  function logConsole(message, isError) {
+    const line = document.createElement("div");
+    if (isError) {
+      line.className = "err";
+    }
+    line.textContent = message;
+    els.console.appendChild(line);
+    while (els.console.childNodes.length > 24) {
+      els.console.removeChild(els.console.firstChild);
+    }
+    els.console.scrollTop = els.console.scrollHeight;
+  }
+
+  function clearConsole() {
+    els.console.textContent = "";
+  }
+
+  function cellCentroidLngLat(code) {
+    const { easting, northing, cellSize } = HKG.hkgeocodeCellOrigin(code);
+    const [lat, lng] = toLatLng(easting + cellSize / 2, northing + cellSize / 2);
+    return [lng, lat];
+  }
+
+  function viewportWgs84() {
+    const bounds = map.getBounds().pad(0.05);
+    return {
+      west: bounds.getWest(),
+      south: bounds.getSouth(),
+      east: bounds.getEast(),
+      north: bounds.getNorth(),
+    };
+  }
+
+  function renderClassLegend() {
+    els.classLegend.textContent = "";
+    if (!polygonColorByValue.size) {
+      return;
+    }
+    const field = els.classField.value;
+    const active = new Set();
+    polygonFeatures.forEach((feature) => {
+      const value = feature.properties ? feature.properties[field] : null;
+      active.add(value == null || value === "" ? "(empty)" : String(value));
+    });
+    const entries = [...polygonColorByValue.entries()].filter(([value]) =>
+      active.has(value)
+    );
+    if (!entries.length) {
+      return;
+    }
+    const shown = entries.slice(0, 16);
+    shown.forEach(([value, color]) => {
+      const row = document.createElement("div");
+      const swatch = document.createElement("span");
+      swatch.className = "swatch-sel";
+      swatch.style.background = color;
+      swatch.style.border = "none";
+      row.appendChild(swatch);
+      row.appendChild(document.createTextNode(` ${value}`));
+      els.classLegend.appendChild(row);
+    });
+    if (entries.length > shown.length) {
+      const more = document.createElement("div");
+      more.textContent = `… and ${entries.length - shown.length} more`;
+      els.classLegend.appendChild(more);
+    }
+  }
+
+  function clearPolygonDisplay() {
+    cellFillByCode = {};
+    polygonFeatures = [];
+    polygonLayer.clearLayers();
+    els.classLegend.textContent = "";
+    viewCanvas._redraw();
+  }
+
+  function resetPolygonColors() {
+    polygonColorByValue = new Map();
+  }
+
+  function applyPolygonAssignment(features, codes) {
+    const field = els.classField.value;
+    features.forEach((feature) => {
+      const value = feature.properties ? feature.properties[field] : null;
+      POLY.colorForValue(value, polygonColorByValue);
+    });
+    const result = POLY.assignCells(
+      features,
+      field,
+      codes,
+      cellCentroidLngLat,
+      polygonColorByValue
+    );
+    cellFillByCode = result.fillByCode;
+    polygonLayer.clearLayers();
+    polygonLayer.addData({ type: "FeatureCollection", features });
+    renderClassLegend();
+    return result.assigned;
+  }
+
+  async function syncPolygonCells() {
+    if (!els.polyCells.checked) {
+      if (Object.keys(cellFillByCode).length || polygonFeatures.length) {
+        clearPolygonDisplay();
+      }
+      return;
+    }
+    if (!polygonLayerInfo) {
+      logConsole("Load a polygon layer first.", true);
+      els.polyCells.checked = false;
+      return;
+    }
+    if (!els.classField.value) {
+      logConsole("Select a classification field before creating cells.", true);
+      els.polyCells.checked = false;
+      return;
+    }
+    const view = viewportHk80();
+    const length = currentLength();
+    if (view.east <= view.west || view.north <= view.south) {
+      logConsole("Map is outside HKGeoCode coverage.", true);
+      clearPolygonDisplay();
+      return;
+    }
+    const codes = HKG.codesInBounds(view.west, view.south, view.east, view.north, length);
+    if (codes.length > MAX_GRID_CELLS) {
+      logConsole(
+        `${codes.length.toLocaleString()} cells in view — zoom in before converting polygons to cells.`,
+        true
+      );
+      clearPolygonDisplay();
+      return;
+    }
+    const requestId = (polygonRequestId += 1);
+    try {
+      logConsole(`Querying ${polygonLayerInfo.name} in the current view…`);
+      const features = await POLY.queryPolygons(polygonLayerInfo, viewportWgs84());
+      if (requestId !== polygonRequestId) {
+        return;
+      }
+      polygonFeatures = features;
+      const assigned = applyPolygonAssignment(features, codes);
+      logConsole(
+        `${features.length} polygon(s) in view. ${assigned} cell(s) included by centroid containment on “${els.classField.value}”.`
+      );
+      viewCanvas._redraw();
+    } catch (err) {
+      if (requestId !== polygonRequestId) {
+        return;
+      }
+      clearPolygonDisplay();
+      logConsole(err.message || String(err), true);
+    }
+  }
+
+  async function loadEsriLayer() {
+    try {
+      els.polyCells.checked = false;
+      resetPolygonColors();
+      clearPolygonDisplay();
+      clearConsole();
+      logConsole("Checking layer…");
+      const info = await POLY.inspectLayer(els.esriUrl.value);
+      polygonLayerInfo = info;
+      els.classField.innerHTML = "";
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = "Select a field";
+      els.classField.appendChild(placeholder);
+      info.fields.forEach((field) => {
+        const option = document.createElement("option");
+        option.value = field.name;
+        option.textContent = field.alias && field.alias !== field.name
+          ? `${field.alias} (${field.name})`
+          : field.name;
+        els.classField.appendChild(option);
+      });
+      els.classField.disabled = false;
+      logConsole(
+        `Polygon layer “${info.name}”. ${info.fields.length} attribute(s) available — select a classification field, then turn on Polygon to cells.`
+      );
+    } catch (err) {
+      polygonLayerInfo = null;
+      els.classField.innerHTML = "";
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "Load a polygon layer first";
+      els.classField.appendChild(option);
+      els.classField.disabled = true;
+      logConsole(err.message || String(err), true);
+    }
+  }
 
   function redrawOverlays() {
     parentLayer.clearLayers();
@@ -615,6 +868,7 @@
   map.on("moveend zoomend", () => {
     updateHoverCode(lastHoverLatLng);
     redrawOverlays();
+    syncPolygonCells();
   });
 
   els.basemap.addEventListener("change", () => {
@@ -626,12 +880,36 @@
   els.resolution.addEventListener("change", () => {
     updateHoverCode(lastHoverLatLng);
     redrawOverlays();
+    syncPolygonCells();
   });
   els.showGrid.addEventListener("change", redrawOverlays);
   els.showLabels.addEventListener("change", redrawOverlays);
   els.showParent.addEventListener("change", redrawOverlays);
   els.showChildren.addEventListener("change", redrawOverlays);
   els.showNeighbours.addEventListener("change", redrawOverlays);
+
+  els.loadEsri.addEventListener("click", loadEsriLayer);
+  els.esriUrl.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      loadEsriLayer();
+    }
+  });
+  els.polyCells.addEventListener("change", () => {
+    syncPolygonCells();
+  });
+  els.classField.addEventListener("change", () => {
+    if (!els.classField.value) {
+      return;
+    }
+    resetPolygonColors();
+    if (els.polyCells.checked) {
+      syncPolygonCells();
+    } else {
+      logConsole(
+        `Classification field “${els.classField.value}”. Turn on Polygon to cells to draw.`
+      );
+    }
+  });
 
   els.fitCell.addEventListener("click", fitSelectedCell);
 
