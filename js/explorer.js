@@ -2,6 +2,7 @@
  * Viewport-only HKGeoCode explorer (Leaflet).
  * Cell boundaries and identifiers are drawn on a canvas covering the current
  * map view so labels stay on every visible cell while panning.
+ * Elton CHAN 2026
  */
 (function () {
   "use strict";
