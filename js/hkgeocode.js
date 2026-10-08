@@ -1,6 +1,7 @@
 /**
  * HKGeoCode encode/decode for Hong Kong 1980 Grid (EPSG:2326).
  * Matches hkgeocode.py: Crockford Base32 pairs at 2 km, 100 m, and 5 m.
+ * Elton CHAN 2026
  */
 (function (root) {
   "use strict";
