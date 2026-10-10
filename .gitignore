@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Chatbot run-time artefacts (map and cells written by chatbot_app.py)
+output/chatbot_*
+
 plugin/node_modules/
 plugin/geolibre-plugin/dist/
 plugin/geolibre-plugin/*.zip

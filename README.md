@@ -128,6 +128,41 @@ Open the GeoTIFF in QGIS (or similar) on an HK80 basemap. The value of each pixe
 
 `--length 2` or `6` bins to 2 km or 5 m cells instead of 100 m. Coordinates are requested or reprojected to EPSG:2326 before binning.
 
+## CSDI chatbot
+
+`chatbot_app.py` is a Streamlit chatbot that takes **two point layers from the CSDI portal**, bins each onto the HKGeoCode grid, measures how the two layers are spatially related, and then answers questions about the datasets with histograms, bar charts, tables and a map. The proof-of-concept pair is [Coordinates of Bus Stops](https://portal.csdi.gov.hk/csdi-webpage/dataset/td_rcd_1638874475129_49745) and [Wi-Fi.HK](https://portal.csdi.gov.hk/csdi-webpage/dataset/dpo_rcd_1629267205215_74392).
+
+```text
+pip install -r requirements-chatbot.txt
+streamlit run chatbot_app.py
+```
+
+Language model via [OpenRouter](https://openrouter.ai/) (tool calling is required, so pick a model that supports it):
+
+```text
+set OPENROUTER_API_KEY=sk-or-...                 # required for the LLM agent
+set OPENROUTER_MODEL=openai/gpt-4o-mini          # optional; e.g. anthropic/claude-3.5-sonnet, google/gemini-2.0-flash-001
+```
+
+The key and model can also be entered in the sidebar. Other OpenAI-compatible servers still work through `OPENAI_BASE_URL` / `OPENAI_API_KEY` (or the sidebar Base URL field). Without a key the app falls back to a keyword-driven rule-based agent that calls the same analysis tools.
+
+**Sidebar.** Type a keyword for layer A and layer B; the app searches the CSDI catalogue (`geoportal/rest/metadata/search`) and keeps only datasets whose ArcGIS FeatureServer has a point layer. You can also paste a FeatureServer layer URL. Choose the resolution (100 m or 2 km cells) and click **Run analysis**.
+
+**Analysis.** Points are requested in EPSG:2326 and encoded with `hkgeocode.py`. For each layer the bot reports points, occupied cells, the count-per-cell distribution and the top cells. Spatial correlation between A and B uses:
+
+| Measure | Meaning |
+| --- | --- |
+| Pearson / Spearman on per-cell counts | over the occupied cells and over the whole study area (every cell inside the 2 km cells occupied by either layer, zeros included) |
+| Jaccard overlap, conditional shares | how many cells hold both layers |
+| Bivariate Moran's I (queen contiguity, permutation test) | whether cells with many A are surrounded by cells with many B; local HH / LL / HL / LH clusters |
+| Nearest-neighbour distances vs a random baseline | median distance from each A to the closest B (and B to A), share within 100 / 200 / 500 m |
+
+The summary map (folium) shows co-location classes per cell (A only, B only, both), a 2 km overview of shared cells, the local Moran clusters and the raw points; it is also saved to `output/chatbot_map_<length>.html` with the cells as GeoJSON.
+
+**Chat.** Example questions: `histogram of Wi-Fi per cell`, `bar chart of Wi-Fi by venue type`, `bar chart of wifi by district weighted by hotspots`, `which 2 km cells have bus stops but no Wi-Fi?`, `how many wifi in Yuen Long`, `what is in cell H9GB`, `correlation at 2 km`, `what should we do next?`. The tools behind these (`chatbot/tools.py`) are shared by the LLM and rule-based agents.
+
+Modules: `chatbot/csdi.py` (catalogue search, FeatureServer download), `chatbot/grid.py` (vectorised HKGeoCode encoding, cell counts), `chatbot/correlation.py` (numpy/scipy spatial statistics), `chatbot/charts.py` (plotly), `chatbot/mapping.py` (folium), `chatbot/tools.py`, `chatbot/llm.py`.
+
 ## Conversion formula
 
 For HK80 easting *E* and northing *N* (metres):
