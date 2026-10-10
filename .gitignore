@@ -2,3 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+
+plugin/node_modules/
+plugin/geolibre-plugin/dist/
+plugin/geolibre-plugin/*.zip

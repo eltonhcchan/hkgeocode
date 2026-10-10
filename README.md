@@ -58,6 +58,19 @@ Then open http://127.0.0.1:8765/explorer.html (or `#code=H8FB2H`). Click a locat
 
 **Polygon to cells** loads an Esri FeatureServer/MapServer polygon layer from a REST URL. The explorer checks that the layer is polygon geometry (errors go to the panel console). Choose a **classification field**, then turn the mode on: a cell is included only if its **centroid** falls inside a polygon, so cells never overlap or double-count. Polygons draw on top of the grid; cells and polygons that share an attribute value use the same colour.
 
+## GeoLibre plugin
+
+`plugin/` is an external GeoLibre plugin with the same grid workflow as the built-in DGGS plugins: cells in the current view, automatic or manual size (2 km, 100 m, 5 m), a 12,000-cell limit, and click-to-identify with parent, neighbours, GeoJSON, and CSV. After install it is listed under Plugins → Installed.
+
+```text
+cd plugin
+npm install
+npm test
+npm run package:geolibre
+```
+
+The zip is `plugin/geolibre-plugin/hkgeocode-0.1.0.zip`. Point GeoLibre at the unpacked `plugin/geolibre-plugin` folder (Settings → Manage Plugins), or run `npm run dev` and open http://127.0.0.1:5174/ (`?hkgeocode=WG73JD` selects that cell).
+
 ## Points to 100 m raster
 
 `points_to_hkgcode_raster.py` bins point features onto the four-character HKGeoCode grid (100 m × 100 m, EPSG:2326) and writes a GeoTIFF. Pixel (0, 0) is the north-west corner. Empty cells are nodata 0. The raster extent is snapped to HKGeoCode cell edges (use `--full-extent` for the whole 64 km × 48 km coverage).

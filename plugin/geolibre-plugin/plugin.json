@@ -1,0 +1,10 @@
+{
+  "id": "hkgeocode",
+  "name": "HKGeoCode",
+  "version": "0.1.0",
+  "author": "Elton Chan",
+  "entry": "dist/index.js",
+  "description": "Hong Kong geocode grid.",
+  "categories": ["Location code"],
+  "style": "dist/style.css"
+}
