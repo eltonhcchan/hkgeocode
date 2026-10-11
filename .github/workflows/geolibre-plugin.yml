@@ -66,18 +66,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ZIP: ${{ steps.manifest.outputs.zip }}
+          VERSION: ${{ steps.manifest.outputs.version }}
         run: |
           sha=$(sha256sum "$ZIP" | cut -d' ' -f1)
-          notes="GeoLibre plugin \`hkgeocode\` ${{ steps.manifest.outputs.version }}.
-
-Install: download the zip, then in GeoLibre open Settings → Manage Plugins and load it (or unpack it and point GeoLibre at the folder).
-
-SHA-256 \`$sha\`"
+          notes=$(printf '%s\n\n%s\n\n%s' \
+            "GeoLibre plugin \`hkgeocode\` $VERSION." \
+            "Install: download the zip, then in GeoLibre open Settings → Manage Plugins and load it (or unpack it and point GeoLibre at the folder)." \
+            "SHA-256 \`$sha\`")
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" "$ZIP" --repo "$GITHUB_REPOSITORY" --clobber
           else
             gh release create "$GITHUB_REF_NAME" "$ZIP" \
               --repo "$GITHUB_REPOSITORY" \
-              --title "GeoLibre plugin ${{ steps.manifest.outputs.version }}" \
+              --title "GeoLibre plugin $VERSION" \
               --notes "$notes"
           fi
