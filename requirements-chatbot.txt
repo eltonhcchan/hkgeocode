@@ -1,0 +1,10 @@
+# CSDI x HKGeoCode chatbot (chatbot_app.py and the chatbot/ package)
+streamlit>=1.40
+openai>=1.50
+pandas>=2.0
+numpy>=1.26
+scipy>=1.11
+plotly>=5.20
+folium>=0.17
+pyproj>=3.6
+requests>=2.31

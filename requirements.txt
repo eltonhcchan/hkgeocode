@@ -1,0 +1,2 @@
+# Root requirements picked up automatically by Streamlit Community Cloud and Codespaces.
+-r requirements-chatbot.txt

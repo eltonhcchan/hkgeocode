@@ -1,0 +1,25 @@
+html,
+body,
+#map {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: flex;
+  font-family: system-ui, sans-serif;
+}
+
+#map {
+  flex: 1;
+  min-width: 0;
+}
+
+#sidebar {
+  box-sizing: border-box;
+  width: 320px;
+  overflow: auto;
+  padding: 12px;
+  border-left: 1px solid #e7e5e4;
+  background: #fff;
+}

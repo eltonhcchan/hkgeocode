@@ -58,6 +58,34 @@ Then open http://127.0.0.1:8765/explorer.html (or `#code=H8FB2H`). Click a locat
 
 **Polygon to cells** loads an Esri FeatureServer/MapServer polygon layer from a REST URL. The explorer checks that the layer is polygon geometry (errors go to the panel console). Choose a **classification field**, then turn the mode on: a cell is included only if its **centroid** falls inside a polygon, so cells never overlap or double-count. Polygons draw on top of the grid; cells and polygons that share an attribute value use the same colour.
 
+## GeoLibre plugin
+
+`plugin/` is an external GeoLibre plugin with the same grid workflow as the built-in DGGS plugins: cells in the current view, automatic or manual size (2 km, 100 m, 5 m), a 12,000-cell limit, and click-to-identify with parent, neighbours, GeoJSON, and CSV. After install it is listed under Plugins → Installed.
+
+**Download.** The packaged plugin, `hkgeocode-<version>.zip`, is published as a [GitHub Release](https://github.com/eltonhcchan/hkgeocode/releases) asset (tags `plugin-v<version>`). Each release lists the zip's SHA-256. Load the zip in GeoLibre via Settings → Manage Plugins, or unpack it and point GeoLibre at the folder.
+
+**Rebuild the zip.** Only the TypeScript sources under `plugin/src/` are committed. The compiled bundle (`plugin/geolibre-plugin/dist/`) and the zip are build outputs, listed in `.gitignore`, so they are not in the repository and must be regenerated locally. Requires Node.js 22 and npm:
+
+```text
+cd plugin
+npm install
+npm test
+npm run package:geolibre
+```
+
+`package:geolibre` runs `vite build` (writes `geolibre-plugin/dist/index.js` and `style.css`) and then `scripts/package-geolibre-plugin.mjs`, which zips `plugin.json` plus the entry and style files named in it into `plugin/geolibre-plugin/hkgeocode-<version>.zip` and prints the SHA-256. The zip uses fixed timestamps, so rebuilding the same commit yields a byte-identical file. The version comes from `plugin/geolibre-plugin/plugin.json`; bump it there (and in `plugin/package.json`) before releasing.
+
+**Publish a release.** Push a tag whose version matches `plugin.json`; the `geolibre-plugin` GitHub Actions workflow runs the tests, rebuilds the zip, and attaches it to a release of the same name:
+
+```text
+git tag plugin-v0.1.0
+git push origin plugin-v0.1.0
+```
+
+Pushes and pull requests that touch `plugin/` also run the workflow and keep the zip as a workflow artifact for 30 days (Actions → geolibre-plugin → the run → Artifacts).
+
+For development, run `npm run dev` and open http://127.0.0.1:5174/ (`?hkgeocode=WG73JD` selects that cell), or point GeoLibre at the unpacked `plugin/geolibre-plugin` folder after a build.
+
 ## Points to 100 m raster
 
 `points_to_hkgcode_raster.py` bins point features onto the four-character HKGeoCode grid (100 m × 100 m, EPSG:2326) and writes a GeoTIFF. Pixel (0, 0) is the north-west corner. Empty cells are nodata 0. The raster extent is snapped to HKGeoCode cell edges (use `--full-extent` for the whole 64 km × 48 km coverage).
@@ -114,6 +142,53 @@ From the CSDI layer (4,480 stops, all inside HKGeoCode coverage):
 Open the GeoTIFF in QGIS (or similar) on an HK80 basemap. The value of each pixel is the number of stops in that neighbourhood cell.
 
 `--length 2` or `6` bins to 2 km or 5 m cells instead of 100 m. Coordinates are requested or reprojected to EPSG:2326 before binning.
+
+## CSDI chatbot
+
+`chatbot_app.py` is a Streamlit chatbot that takes **two point layers from the CSDI portal**, bins each onto the HKGeoCode grid, measures how the two layers are spatially related, and then answers questions about the datasets with histograms, bar charts, tables and a map. The proof-of-concept pair is [Coordinates of Bus Stops](https://portal.csdi.gov.hk/csdi-webpage/dataset/td_rcd_1638874475129_49745) and [Wi-Fi.HK](https://portal.csdi.gov.hk/csdi-webpage/dataset/dpo_rcd_1629267205215_74392).
+
+```text
+pip install -r requirements-chatbot.txt
+streamlit run chatbot_app.py
+```
+
+Language model via [OpenRouter](https://openrouter.ai/) (tool calling is required, so pick a model that supports it):
+
+```text
+set OPENROUTER_API_KEY=sk-or-...                 # required for the LLM agent
+set OPENROUTER_MODEL=openai/gpt-4o-mini          # optional; e.g. anthropic/claude-3.5-sonnet, google/gemini-2.0-flash-001
+```
+
+The key and model can also be entered in the sidebar. Other OpenAI-compatible servers still work through `OPENAI_BASE_URL` / `OPENAI_API_KEY` (or the sidebar Base URL field). Without a key the app falls back to a keyword-driven rule-based agent that calls the same analysis tools.
+
+### Run it from GitHub
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/eltonhcchan/hkgeocode?quickstart=1)
+[![Deploy to Streamlit Community Cloud](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/deploy?repository=eltonhcchan/hkgeocode&branch=main&mainModule=chatbot_app.py)
+[![chatbot](https://github.com/eltonhcchan/hkgeocode/actions/workflows/chatbot.yml/badge.svg)](https://github.com/eltonhcchan/hkgeocode/actions/workflows/chatbot.yml)
+
+- **Codespaces**: the badge opens a dev container (`.devcontainer/devcontainer.json`) that installs `requirements.txt` and starts `streamlit run chatbot_app.py` on port 8501, which Codespaces forwards and previews automatically. Add `OPENROUTER_API_KEY` as a [Codespaces secret](https://github.com/settings/codespaces) (or paste it in the sidebar) to enable the LLM agent.
+- **Streamlit Community Cloud**: the badge pre-fills the deploy form (repository, branch, `chatbot_app.py`). Dependencies come from the root `requirements.txt`; after deploying, open *App settings -> Secrets* and paste the contents of `.streamlit/secrets.toml.example` with your key. The app reads `st.secrets` first, then environment variables.
+- **GitHub Actions** (`.github/workflows/chatbot.yml`): on every push touching the chatbot it runs the HKGeoCode self-test, pyflakes, an offline smoke test on synthetic layers (`python -m chatbot.smoke`, no CSDI access needed) and checks that the Streamlit server starts.
+
+Locally, `python -m chatbot.smoke` runs the same offline check.
+
+**Sidebar.** Type a keyword for layer A and layer B; the app searches the CSDI catalogue (`geoportal/rest/metadata/search`) and keeps only datasets whose ArcGIS FeatureServer has a point layer. You can also paste a FeatureServer layer URL. Choose the resolution (100 m or 2 km cells) and click **Run analysis**.
+
+**Analysis.** Points are requested in EPSG:2326 and encoded with `hkgeocode.py`. For each layer the bot reports points, occupied cells, the count-per-cell distribution and the top cells. Spatial correlation between A and B uses:
+
+| Measure | Meaning |
+| --- | --- |
+| Pearson / Spearman on per-cell counts | over the occupied cells and over the whole study area (every cell inside the 2 km cells occupied by either layer, zeros included) |
+| Jaccard overlap, conditional shares | how many cells hold both layers |
+| Bivariate Moran's I (queen contiguity, permutation test) | whether cells with many A are surrounded by cells with many B; local HH / LL / HL / LH clusters |
+| Nearest-neighbour distances vs a random baseline | median distance from each A to the closest B (and B to A), share within 100 / 200 / 500 m |
+
+The summary map (folium) shows co-location classes per cell (A only, B only, both), a 2 km overview of shared cells, the local Moran clusters and the raw points; it is also saved to `output/chatbot_map_<length>.html` with the cells as GeoJSON.
+
+**Chat.** Example questions: `histogram of Wi-Fi per cell`, `bar chart of Wi-Fi by venue type`, `bar chart of wifi by district weighted by hotspots`, `which 2 km cells have bus stops but no Wi-Fi?`, `how many wifi in Yuen Long`, `what is in cell H9GB`, `correlation at 2 km`, `what should we do next?`. The tools behind these (`chatbot/tools.py`) are shared by the LLM and rule-based agents.
+
+Modules: `chatbot/csdi.py` (catalogue search, FeatureServer download), `chatbot/grid.py` (vectorised HKGeoCode encoding, cell counts), `chatbot/correlation.py` (numpy/scipy spatial statistics), `chatbot/charts.py` (plotly), `chatbot/mapping.py` (folium), `chatbot/tools.py`, `chatbot/llm.py`.
 
 ## Conversion formula
 

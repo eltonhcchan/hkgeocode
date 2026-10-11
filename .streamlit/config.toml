@@ -1,0 +1,10 @@
+[server]
+headless = true
+# The folium map and plotly figures are a few MB per message.
+maxMessageSize = 400
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "light"
