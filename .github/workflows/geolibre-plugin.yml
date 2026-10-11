@@ -1,0 +1,83 @@
+name: geolibre-plugin
+
+# Builds plugin/geolibre-plugin/hkgeocode-<version>.zip.
+# - On every push / pull request touching plugin/: test, build, and keep the zip
+#   as a workflow artifact for 30 days.
+# - On a tag named plugin-v<version> (for example plugin-v0.1.0): also publish the
+#   zip as a GitHub Release asset. The tag version must match plugin.json.
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["plugin-v*"]
+    paths:
+      - "plugin/**"
+      - ".github/workflows/geolibre-plugin.yml"
+  pull_request:
+    paths:
+      - "plugin/**"
+      - ".github/workflows/geolibre-plugin.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    working-directory: plugin
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: plugin/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: Build and package
+        run: npm run package:geolibre
+      - name: Read manifest version
+        id: manifest
+        run: |
+          version=$(node -p "require('./geolibre-plugin/plugin.json').version")
+          id=$(node -p "require('./geolibre-plugin/plugin.json').id")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "zip=geolibre-plugin/$id-$version.zip" >> "$GITHUB_OUTPUT"
+      - name: Check tag matches plugin.json
+        if: startsWith(github.ref, 'refs/tags/plugin-v')
+        run: |
+          tag_version="${GITHUB_REF_NAME#plugin-v}"
+          if [ "$tag_version" != "${{ steps.manifest.outputs.version }}" ]; then
+            echo "Tag plugin-v$tag_version does not match plugin.json version ${{ steps.manifest.outputs.version }}"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hkgeocode-geolibre-plugin-${{ steps.manifest.outputs.version }}
+          path: plugin/${{ steps.manifest.outputs.zip }}
+          retention-days: 30
+      - name: Publish release asset
+        if: startsWith(github.ref, 'refs/tags/plugin-v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ZIP: ${{ steps.manifest.outputs.zip }}
+        run: |
+          sha=$(sha256sum "$ZIP" | cut -d' ' -f1)
+          notes="GeoLibre plugin \`hkgeocode\` ${{ steps.manifest.outputs.version }}.
+
+Install: download the zip, then in GeoLibre open Settings → Manage Plugins and load it (or unpack it and point GeoLibre at the folder).
+
+SHA-256 \`$sha\`"
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$ZIP" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$ZIP" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "GeoLibre plugin ${{ steps.manifest.outputs.version }}" \
+              --notes "$notes"
+          fi

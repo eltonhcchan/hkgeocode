@@ -62,6 +62,10 @@ Then open http://127.0.0.1:8765/explorer.html (or `#code=H8FB2H`). Click a locat
 
 `plugin/` is an external GeoLibre plugin with the same grid workflow as the built-in DGGS plugins: cells in the current view, automatic or manual size (2 km, 100 m, 5 m), a 12,000-cell limit, and click-to-identify with parent, neighbours, GeoJSON, and CSV. After install it is listed under Plugins → Installed.
 
+**Download.** The packaged plugin, `hkgeocode-<version>.zip`, is published as a [GitHub Release](https://github.com/eltonhcchan/hkgeocode/releases) asset (tags `plugin-v<version>`). Each release lists the zip's SHA-256. Load the zip in GeoLibre via Settings → Manage Plugins, or unpack it and point GeoLibre at the folder.
+
+**Rebuild the zip.** Only the TypeScript sources under `plugin/src/` are committed. The compiled bundle (`plugin/geolibre-plugin/dist/`) and the zip are build outputs, listed in `.gitignore`, so they are not in the repository and must be regenerated locally. Requires Node.js 22 and npm:
+
 ```text
 cd plugin
 npm install
@@ -69,7 +73,18 @@ npm test
 npm run package:geolibre
 ```
 
-The zip is `plugin/geolibre-plugin/hkgeocode-0.1.0.zip`. Point GeoLibre at the unpacked `plugin/geolibre-plugin` folder (Settings → Manage Plugins), or run `npm run dev` and open http://127.0.0.1:5174/ (`?hkgeocode=WG73JD` selects that cell).
+`package:geolibre` runs `vite build` (writes `geolibre-plugin/dist/index.js` and `style.css`) and then `scripts/package-geolibre-plugin.mjs`, which zips `plugin.json` plus the entry and style files named in it into `plugin/geolibre-plugin/hkgeocode-<version>.zip` and prints the SHA-256. The zip uses fixed timestamps, so rebuilding the same commit yields a byte-identical file. The version comes from `plugin/geolibre-plugin/plugin.json`; bump it there (and in `plugin/package.json`) before releasing.
+
+**Publish a release.** Push a tag whose version matches `plugin.json`; the `geolibre-plugin` GitHub Actions workflow runs the tests, rebuilds the zip, and attaches it to a release of the same name:
+
+```text
+git tag plugin-v0.1.0
+git push origin plugin-v0.1.0
+```
+
+Pushes and pull requests that touch `plugin/` also run the workflow and keep the zip as a workflow artifact for 30 days (Actions → geolibre-plugin → the run → Artifacts).
+
+For development, run `npm run dev` and open http://127.0.0.1:5174/ (`?hkgeocode=WG73JD` selects that cell), or point GeoLibre at the unpacked `plugin/geolibre-plugin` folder after a build.
 
 ## Points to 100 m raster
 
