@@ -5,6 +5,8 @@ __pycache__/
 
 # Chatbot run-time artefacts (map and cells written by chatbot_app.py)
 output/chatbot_*
+# Local Streamlit secrets (API keys)
+.streamlit/secrets.toml
 
 plugin/node_modules/
 plugin/geolibre-plugin/dist/

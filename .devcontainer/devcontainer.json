@@ -1,0 +1,17 @@
+{
+  "name": "hkgeocode chatbot",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "postCreateCommand": "pip install --user -r requirements.txt",
+  "postAttachCommand": "streamlit run chatbot_app.py --server.port 8501 --server.address 0.0.0.0",
+  "forwardPorts": [8501],
+  "portsAttributes": {
+    "8501": { "label": "Streamlit chatbot", "onAutoForward": "openPreview" }
+  },
+  "customizations": {
+    "codespaces": { "openFiles": ["README.md", "chatbot_app.py"] },
+    "vscode": { "extensions": ["ms-python.python"] }
+  },
+  "remoteEnv": {
+    "OPENROUTER_API_KEY": "${localEnv:OPENROUTER_API_KEY}"
+  }
+}

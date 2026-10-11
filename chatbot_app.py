@@ -36,6 +36,16 @@ from chatbot.tools import Artefact, Session, run_tool  # noqa: E402
 
 st.set_page_config(page_title="CSDI x HKGeoCode chatbot", page_icon=":world_map:", layout="wide")
 
+def _secret(name: str, fallback: str = "") -> str:
+    """Streamlit secrets (Community Cloud / .streamlit/secrets.toml) take precedence over env vars."""
+    try:
+        if name in st.secrets:
+            return str(st.secrets[name])
+    except Exception:  # no secrets file
+        pass
+    return fallback
+
+
 RESOLUTIONS = {"100 m neighbourhood cell (4 chars)": 4, "2 km district cell (2 chars)": 2}
 SLOT_DEFAULTS = {
     "A": ("Coordinates of Bus Stops", DEFAULT_LAYERS["Coordinates of Bus Stops"]),
@@ -202,15 +212,21 @@ with st.sidebar:
 
     st.divider()
     st.markdown("**Language model (OpenRouter)**")
-    st.checkbox("Use LLM agent", value=bool(default_api_key()), key="use_llm")
-    st.text_input("OpenRouter API key", value=default_api_key(), type="password", key="api_key", help="OPENROUTER_API_KEY")
+    key_default = _secret("OPENROUTER_API_KEY", default_api_key())
+    st.checkbox("Use LLM agent", value=bool(key_default), key="use_llm")
+    st.text_input("OpenRouter API key", value=key_default, type="password", key="api_key", help="OPENROUTER_API_KEY (env var or Streamlit secret)")
     st.text_input(
         "Model",
-        value=default_model(),
+        value=_secret("OPENROUTER_MODEL", default_model()),
         key="model",
         help="Any OpenRouter model id with tool calling, e.g. openai/gpt-4o-mini, anthropic/claude-3.5-sonnet, google/gemini-2.0-flash-001",
     )
-    st.text_input("Base URL", value=default_base_url(), key="base_url", help="Change only for a non-OpenRouter OpenAI-compatible server")
+    st.text_input(
+        "Base URL",
+        value=_secret("OPENROUTER_BASE_URL", default_base_url()),
+        key="base_url",
+        help="Change only for a non-OpenRouter OpenAI-compatible server",
+    )
     agent = _agent()
     if st.session_state.get("agent_warning"):
         st.warning(f"LLM unavailable ({st.session_state.agent_warning}); using the rule-based agent.")

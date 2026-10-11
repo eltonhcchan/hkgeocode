@@ -146,6 +146,18 @@ set OPENROUTER_MODEL=openai/gpt-4o-mini          # optional; e.g. anthropic/clau
 
 The key and model can also be entered in the sidebar. Other OpenAI-compatible servers still work through `OPENAI_BASE_URL` / `OPENAI_API_KEY` (or the sidebar Base URL field). Without a key the app falls back to a keyword-driven rule-based agent that calls the same analysis tools.
 
+### Run it from GitHub
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/eltonhcchan/hkgeocode?quickstart=1)
+[![Deploy to Streamlit Community Cloud](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/deploy?repository=eltonhcchan/hkgeocode&branch=main&mainModule=chatbot_app.py)
+[![chatbot](https://github.com/eltonhcchan/hkgeocode/actions/workflows/chatbot.yml/badge.svg)](https://github.com/eltonhcchan/hkgeocode/actions/workflows/chatbot.yml)
+
+- **Codespaces**: the badge opens a dev container (`.devcontainer/devcontainer.json`) that installs `requirements.txt` and starts `streamlit run chatbot_app.py` on port 8501, which Codespaces forwards and previews automatically. Add `OPENROUTER_API_KEY` as a [Codespaces secret](https://github.com/settings/codespaces) (or paste it in the sidebar) to enable the LLM agent.
+- **Streamlit Community Cloud**: the badge pre-fills the deploy form (repository, branch, `chatbot_app.py`). Dependencies come from the root `requirements.txt`; after deploying, open *App settings -> Secrets* and paste the contents of `.streamlit/secrets.toml.example` with your key. The app reads `st.secrets` first, then environment variables.
+- **GitHub Actions** (`.github/workflows/chatbot.yml`): on every push touching the chatbot it runs the HKGeoCode self-test, pyflakes, an offline smoke test on synthetic layers (`python -m chatbot.smoke`, no CSDI access needed) and checks that the Streamlit server starts.
+
+Locally, `python -m chatbot.smoke` runs the same offline check.
+
 **Sidebar.** Type a keyword for layer A and layer B; the app searches the CSDI catalogue (`geoportal/rest/metadata/search`) and keeps only datasets whose ArcGIS FeatureServer has a point layer. You can also paste a FeatureServer layer URL. Choose the resolution (100 m or 2 km cells) and click **Run analysis**.
 
 **Analysis.** Points are requested in EPSG:2326 and encoded with `hkgeocode.py`. For each layer the bot reports points, occupied cells, the count-per-cell distribution and the top cells. Spatial correlation between A and B uses:
