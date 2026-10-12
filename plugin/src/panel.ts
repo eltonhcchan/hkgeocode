@@ -9,6 +9,9 @@ export interface SelectedCellView {
   neighbors: string[];
   easting: number;
   northing: number;
+  /** HK1980 Grid (EPSG:2326) position, in metres. A click uses that point; a code uses the cell centre. */
+  hk80Easting: number;
+  hk80Northing: number;
   lat: number;
   lng: number;
 }
@@ -31,6 +34,7 @@ export interface PanelModel {
   setFillOpacity(value: number): void;
   setLineColor(value: string): void;
   setLineWidth(value: number): void;
+  setLabelColor(value: string): void;
   setShowLabels(value: boolean): void;
   setIncludeNeighbors(value: boolean): void;
   setIncludeParent(value: boolean): void;
@@ -56,8 +60,16 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+function controlId(input: HTMLInputElement | HTMLSelectElement, id: string): void {
+  input.id = id;
+  input.name = id;
+}
+
 function row(labelText: string, control: HTMLElement): HTMLLabelElement {
   const label = el("label", "hkgeocode-row");
+  if (control.id) {
+    label.htmlFor = control.id;
+  }
   label.append(el("span", undefined, labelText), control);
   return label;
 }
@@ -76,15 +88,17 @@ function formatMetres(value: number): string {
 }
 
 export function mountPanel(container: HTMLElement, model: PanelModel): () => void {
-  container.replaceChildren();
   const root = el("div", "hkgeocode-panel");
 
   const auto = el("input") as HTMLInputElement;
   auto.type = "checkbox";
+  controlId(auto, "hkgeocode-auto-resolution");
   const autoLabel = el("label", "hkgeocode-check");
+  autoLabel.htmlFor = auto.id;
   autoLabel.append(auto, el("span", undefined, "Automatic resolution"));
 
   const length = el("select") as HTMLSelectElement;
+  controlId(length, "hkgeocode-length");
   for (const [value, label] of [
     ["2", "2 km"],
     ["4", "100 m"],
@@ -97,24 +111,34 @@ export function mountPanel(container: HTMLElement, model: PanelModel): () => voi
 
   const fillColor = el("input") as HTMLInputElement;
   fillColor.type = "color";
+  controlId(fillColor, "hkgeocode-fill-color");
   const fillOpacity = el("input") as HTMLInputElement;
   fillOpacity.type = "range";
+  controlId(fillOpacity, "hkgeocode-fill-opacity");
   fillOpacity.min = "0";
   fillOpacity.max = "0.6";
   fillOpacity.step = "0.02";
 
   const lineColor = el("input") as HTMLInputElement;
   lineColor.type = "color";
+  controlId(lineColor, "hkgeocode-line-color");
   const lineWidth = el("input") as HTMLInputElement;
   lineWidth.type = "range";
+  controlId(lineWidth, "hkgeocode-line-width");
   lineWidth.min = "0.5";
   lineWidth.max = "4";
   lineWidth.step = "0.25";
 
   const showLabels = el("input") as HTMLInputElement;
   showLabels.type = "checkbox";
+  controlId(showLabels, "hkgeocode-show-labels");
   const labelsLabel = el("label", "hkgeocode-check");
+  labelsLabel.htmlFor = showLabels.id;
   labelsLabel.append(showLabels, el("span", undefined, "Show cell IDs"));
+
+  const labelColor = el("input") as HTMLInputElement;
+  labelColor.type = "color";
+  controlId(labelColor, "hkgeocode-label-color");
 
   const status = el("p", "hkgeocode-status");
   status.setAttribute("role", "status");
@@ -123,6 +147,7 @@ export function mountPanel(container: HTMLElement, model: PanelModel): () => voi
 
   const codeInput = el("input") as HTMLInputElement;
   codeInput.type = "text";
+  controlId(codeInput, "hkgeocode-code");
   codeInput.spellcheck = false;
   codeInput.autocomplete = "off";
   codeInput.placeholder = "WG73JD";
@@ -143,6 +168,9 @@ export function mountPanel(container: HTMLElement, model: PanelModel): () => voi
   const children = el("p", "hkgeocode-detail");
   const neighbors = el("p", "hkgeocode-detail");
   const origin = el("p", "hkgeocode-detail");
+  const easting = el("p", "hkgeocode-detail");
+  const northing = el("p", "hkgeocode-detail");
+  const hk80 = el("p", "hkgeocode-detail", "HK1980 Grid");
   const center = el("p", "hkgeocode-detail");
 
   const zoom = el("button", undefined, "Zoom to cell");
@@ -150,12 +178,16 @@ export function mountPanel(container: HTMLElement, model: PanelModel): () => voi
 
   const includeNeighbors = el("input") as HTMLInputElement;
   includeNeighbors.type = "checkbox";
+  controlId(includeNeighbors, "hkgeocode-include-neighbors");
   const neighborsLabel = el("label", "hkgeocode-check");
+  neighborsLabel.htmlFor = includeNeighbors.id;
   neighborsLabel.append(includeNeighbors, el("span", undefined, "Include selected cell neighbors"));
 
   const includeParent = el("input") as HTMLInputElement;
   includeParent.type = "checkbox";
+  controlId(includeParent, "hkgeocode-include-parent");
   const parentLabel = el("label", "hkgeocode-check");
+  parentLabel.htmlFor = includeParent.id;
   parentLabel.append(includeParent, el("span", undefined, "Include selected cell parent"));
 
   const addLayer = el("button", undefined, "Add grid as layer");
@@ -177,6 +209,7 @@ export function mountPanel(container: HTMLElement, model: PanelModel): () => voi
     row("Outline color", lineColor),
     row("Outline width", lineWidth),
     labelsLabel,
+    row("Label color", labelColor),
     status,
     el("h3", undefined, "Selected cell"),
     row("Code", goRow),
@@ -186,6 +219,9 @@ export function mountPanel(container: HTMLElement, model: PanelModel): () => voi
     children,
     neighbors,
     origin,
+    easting,
+    northing,
+    hk80,
     center,
     zoom,
     neighborsLabel,
@@ -194,6 +230,11 @@ export function mountPanel(container: HTMLElement, model: PanelModel): () => voi
     actions,
     hint,
   );
+  for (const child of [...container.children]) {
+    if (child.classList.contains("hkgeocode-panel")) {
+      child.remove();
+    }
+  }
   container.append(root);
 
   auto.addEventListener("change", () => model.setAutoResolution(auto.checked));
@@ -207,7 +248,11 @@ export function mountPanel(container: HTMLElement, model: PanelModel): () => voi
   fillOpacity.addEventListener("input", () => model.setFillOpacity(Number(fillOpacity.value)));
   lineColor.addEventListener("input", () => model.setLineColor(lineColor.value));
   lineWidth.addEventListener("input", () => model.setLineWidth(Number(lineWidth.value)));
-  showLabels.addEventListener("change", () => model.setShowLabels(showLabels.checked));
+  showLabels.addEventListener("change", (event) => {
+    event.stopPropagation();
+    model.setShowLabels(showLabels.checked);
+  });
+  labelColor.addEventListener("input", () => model.setLabelColor(labelColor.value));
   includeNeighbors.addEventListener("change", () =>
     model.setIncludeNeighbors(includeNeighbors.checked),
   );
@@ -256,6 +301,7 @@ export function mountPanel(container: HTMLElement, model: PanelModel): () => voi
     setIdleValue(lineColor, view.lineColor);
     setIdleValue(lineWidth, String(view.lineWidth));
     showLabels.checked = view.showLabels;
+    setIdleValue(labelColor, view.labelColor);
     includeNeighbors.checked = view.includeNeighbors;
     includeParent.checked = view.includeParent;
     status.textContent = view.status;
@@ -272,6 +318,9 @@ export function mountPanel(container: HTMLElement, model: PanelModel): () => voi
       children.textContent = "";
       neighbors.textContent = "";
       origin.textContent = "";
+      easting.textContent = "";
+      northing.textContent = "";
+      hk80.hidden = true;
       center.textContent = "";
       return;
     }
@@ -283,6 +332,9 @@ export function mountPanel(container: HTMLElement, model: PanelModel): () => voi
       selected.neighbors.length > 0 ? selected.neighbors.join(", ") : "—"
     }`;
     origin.textContent = `HK80 origin: E ${formatMetres(selected.easting)}  N ${formatMetres(selected.northing)}`;
+    easting.textContent = `Easting: ${formatMetres(selected.hk80Easting)} m`;
+    northing.textContent = `Northing: ${formatMetres(selected.hk80Northing)} m`;
+    hk80.hidden = false;
     center.textContent = `Center: ${selected.lat.toFixed(6)}, ${selected.lng.toFixed(6)}`;
   };
 

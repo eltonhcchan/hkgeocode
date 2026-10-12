@@ -7,6 +7,7 @@ export interface PluginState {
   fillOpacity: number;
   lineColor: string;
   lineWidth: number;
+  labelColor: string;
   showLabels: boolean;
   includeNeighbors: boolean;
   includeParent: boolean;
@@ -20,6 +21,7 @@ export const DEFAULT_STATE: PluginState = {
   fillOpacity: 0.12,
   lineColor: "#0f766e",
   lineWidth: 1.25,
+  labelColor: "#134e4a",
   showLabels: true,
   includeNeighbors: false,
   includeParent: false,
@@ -46,6 +48,11 @@ export function normalizePluginState(value: unknown): PluginState | null {
     return null;
   }
   if (typeof value.lineColor !== "string" || !HEX_COLOR.test(value.lineColor)) {
+    return null;
+  }
+  const labelColor =
+    value.labelColor === undefined ? DEFAULT_STATE.labelColor : value.labelColor;
+  if (typeof labelColor !== "string" || !HEX_COLOR.test(labelColor)) {
     return null;
   }
   if (
@@ -91,6 +98,7 @@ export function normalizePluginState(value: unknown): PluginState | null {
     fillOpacity: value.fillOpacity,
     lineColor: value.lineColor,
     lineWidth: value.lineWidth,
+    labelColor,
     showLabels: value.showLabels,
     includeNeighbors: value.includeNeighbors,
     includeParent: value.includeParent,

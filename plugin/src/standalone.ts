@@ -39,6 +39,9 @@ const app: GeoLibreAppAPI = {
     return true;
   },
   registerExternalNativeLayer(layer) {
+    if (layer.paintMode === "plugin" && !layer.geojson) {
+      return;
+    }
     const sourceId = `hkgeocode-added-${layer.id}`;
     const data = layer.geojson ?? { type: "FeatureCollection", features: [] };
     const existing = map.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;

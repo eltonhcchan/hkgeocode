@@ -15,6 +15,25 @@ import {
 
 export const VIEWPORT_CELL_LIMIT = 12_000;
 
+/** Cell-id text size in pixels. */
+export const LABEL_TEXT_SIZE = 12;
+
+/** Cell IDs are drawn from this map zoom upward. */
+export const LABEL_MIN_ZOOM = 10;
+
+export function labelsForZoom(
+  collection: CellFeatureCollection,
+  zoom: number,
+): CellFeatureCollection {
+  if (!Number.isFinite(zoom) || zoom < LABEL_MIN_ZOOM) {
+    return { type: "FeatureCollection", features: [] };
+  }
+  return {
+    type: "FeatureCollection",
+    features: collection.features,
+  };
+}
+
 /** Hong Kong 1980 Grid, EPSG:2326. */
 export const HK80_PROJ =
   "+proj=tmerc +lat_0=22.31213333333334 +lon_0=114.1785555555556 +k=1 " +

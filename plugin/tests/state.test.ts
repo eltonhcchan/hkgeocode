@@ -11,6 +11,9 @@ describe("project state", () => {
     expect(normalizePluginState({ ...DEFAULT_STATE, selectedCode: "wg73jd" })?.selectedCode).toBe(
       "WG73JD",
     );
+    const legacy = { ...DEFAULT_STATE } as Partial<typeof DEFAULT_STATE>;
+    delete legacy.labelColor;
+    expect(normalizePluginState(legacy)?.labelColor).toBe(DEFAULT_STATE.labelColor);
   });
 });
 
