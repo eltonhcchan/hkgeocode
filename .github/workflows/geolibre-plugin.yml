@@ -3,7 +3,7 @@ name: geolibre-plugin
 # Builds plugin/geolibre-plugin/hkgeocode-<version>.zip.
 # - On every push / pull request touching plugin/: test, build, and keep the zip
 #   as a workflow artifact for 30 days.
-# - On a tag named plugin-v<version> (for example plugin-v0.1.0): also publish the
+# - On a tag named plugin-v<version> (for example plugin-v0.2.0): also publish the
 #   zip as a GitHub Release asset. The tag version must match plugin.json.
 
 on:

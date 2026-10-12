@@ -78,8 +78,8 @@ npm run package:geolibre
 **Publish a release.** Push a tag whose version matches `plugin.json`; the `geolibre-plugin` GitHub Actions workflow runs the tests, rebuilds the zip, and attaches it to a release of the same name:
 
 ```text
-git tag plugin-v0.1.0
-git push origin plugin-v0.1.0
+git tag plugin-v0.2.0
+git push origin plugin-v0.2.0
 ```
 
 Pushes and pull requests that touch `plugin/` also run the workflow and keep the zip as a workflow artifact for 30 days (Actions → geolibre-plugin → the run → Artifacts).

@@ -5,6 +5,8 @@ import {
   cellFeature,
   gridForHk80Bounds,
   gridForLngLatBounds,
+  LABEL_MIN_ZOOM,
+  labelsForZoom,
   projectToHk80,
   toCsv,
 } from "../src/grid";
@@ -63,5 +65,17 @@ describe("viewport cell limit", () => {
     expect(collection.features).toHaveLength(1);
     expect(collection.features[0].properties.hkgeocode).toBe("00");
     expect(toCsv(collection).split("\n")[1]?.startsWith("00,2,")).toBe(true);
+  });
+});
+
+describe("cell id zoom", () => {
+  it("shows every cell id from zoom 10 and none below it", () => {
+    const collection = gridForHk80Bounds(
+      { west: 800_000, south: 800_000, east: 801_000, north: 801_000 },
+      2,
+    );
+    expect(LABEL_MIN_ZOOM).toBe(10);
+    expect(labelsForZoom(collection, 9.9).features).toHaveLength(0);
+    expect(labelsForZoom(collection, 10).features).toEqual(collection.features);
   });
 });

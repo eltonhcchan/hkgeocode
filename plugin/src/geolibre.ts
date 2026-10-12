@@ -7,7 +7,7 @@ import "./styles.css";
 
 export const PLUGIN_ID = "hkgeocode";
 export const PLUGIN_NAME = "HKGeoCode";
-export const PLUGIN_VERSION = "0.1.0";
+export const PLUGIN_VERSION = "0.2.0";
 export const URL_PARAM = "hkgeocode";
 const PANEL_ID = "hkgeocode";
 

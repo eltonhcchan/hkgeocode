@@ -27,6 +27,9 @@ export interface GeoLibreNativeLayerRegistration {
   sourceIds: string[];
   opacity: number;
   style: GeoLibreNativeLayerStyle;
+  /** "plugin" keeps GeoLibre's style sync from repainting these layers. */
+  paintMode?: "geolibre" | "plugin";
+  metadata?: Record<string, unknown>;
 }
 
 export interface GeoLibreRightPanelRegistration {
@@ -41,6 +44,7 @@ export interface GeoLibreAppAPI {
   removeMapControl: (control: IControl) => void;
   addGeoJsonLayer?: (name: string, data: CellFeatureCollection, sourcePath?: string) => string;
   registerExternalNativeLayer?: (layer: GeoLibreNativeLayerRegistration) => void;
+  unregisterExternalNativeLayer?: (id: string) => void;
   registerRightPanel?: (panel: GeoLibreRightPanelRegistration) => () => void;
   openRightPanel?: (id: string) => boolean;
 }

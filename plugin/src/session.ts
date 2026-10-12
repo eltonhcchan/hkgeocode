@@ -8,6 +8,8 @@ import {
   exportBaseName,
   gridForHk80Bounds,
   hk80BoundsFromLngLatBounds,
+  LABEL_TEXT_SIZE,
+  labelsForZoom,
   layerName,
   projectToHk80,
   projectToLngLat,
@@ -31,10 +33,13 @@ import {
 import type { PanelModel, PanelView, SelectedCellView } from "./panel";
 import { DEFAULT_STATE, normalizePluginState, type PluginState } from "./state";
 
-const GRID_SOURCE = "hkgeocode-grid";
-const FILL_LAYER = "hkgeocode-grid-fill";
-const LINE_LAYER = "hkgeocode-grid-line";
-const LABEL_LAYER = "hkgeocode-grid-label";
+/** Ids deliberately avoid the DGGS `*-grid-fill` / `*-grid-line` suffix those plugins restyle together. */
+const OWNED_LAYER_ID = "hkgeocode-cells";
+const GRID_SOURCE = "hkgeocode-cells";
+const FILL_LAYER = "hkgeocode-cells-fill";
+const LINE_LAYER = "hkgeocode-cells-line";
+const LABEL_SOURCE = "hkgeocode-id-text";
+const LABEL_LAYER = "hkgeocode-id-text-layer";
 const SELECTION_SOURCE = "hkgeocode-selection";
 const SELECTION_LAYER = "hkgeocode-selection-line";
 const NEIGHBOR_SOURCE = "hkgeocode-neighbors";
@@ -50,20 +55,24 @@ const LAYER_IDS = [
   LINE_LAYER,
   FILL_LAYER,
 ];
-const SOURCE_IDS = [GRID_SOURCE, SELECTION_SOURCE, NEIGHBOR_SOURCE, PARENT_SOURCE];
+const SOURCE_IDS = [LABEL_SOURCE, GRID_SOURCE, SELECTION_SOURCE, NEIGHBOR_SOURCE, PARENT_SOURCE];
 
 export class HkgeocodeSession implements PanelModel {
   private state: PluginState;
   private collection: CellFeatureCollection = EMPTY_COLLECTION;
+  private labels: CellFeatureCollection = EMPTY_COLLECTION;
   private count = 0;
   private limited = false;
   private ready = false;
   private message: string | null = null;
+  /** HK1980 easting/northing of the last identified point. Null uses the cell centre. */
+  private hk80Point: { easting: number; northing: number } | null = null;
   private pendingFit: string | null = null;
   private frame = 0;
   private bootFrame = 0;
   private fitTimer = 0;
   private fitStable = 0;
+  private painting = false;
   private previousCursor = "";
   private listeners = new Set<() => void>();
   private readonly onMoveEnd = () => {
@@ -78,6 +87,12 @@ export class HkgeocodeSession implements PanelModel {
   private readonly onClick = (event: MapMouseEvent) => {
     this.identify(event.lngLat.lng, event.lngLat.lat);
   };
+  /** Another DGGS style sync can rewrite every grid layer. Put our own colours back. */
+  private readonly onStyleData = () => {
+    this.scheduleBoot();
+    this.restoreOwnPaint();
+  };
+
   /**
    * `styledata` can fire before `isStyleLoaded()` flips true. Defer one frame
    * so the style has settled, and again after a basemap swap removes sources.
@@ -135,7 +150,7 @@ export class HkgeocodeSession implements PanelModel {
     this.map.on("moveend", this.onMoveEnd);
     this.map.on("zoomend", this.onMoveEnd);
     this.map.on("click", this.onClick);
-    this.map.on("styledata", this.scheduleBoot);
+    this.map.on("styledata", this.onStyleData);
     this.map.on("idle", this.scheduleBoot);
     this.map.on("load", this.scheduleBoot);
     this.scheduleBoot();
@@ -157,7 +172,8 @@ export class HkgeocodeSession implements PanelModel {
     this.map.off("moveend", this.onMoveEnd);
     this.map.off("zoomend", this.onMoveEnd);
     this.map.off("click", this.onClick);
-    this.map.off("styledata", this.scheduleBoot);
+    this.map.off("styledata", this.onStyleData);
+    this.app.unregisterExternalNativeLayer?.(OWNED_LAYER_ID);
     this.map.off("idle", this.scheduleBoot);
     this.map.off("load", this.scheduleBoot);
     this.map.getCanvas().style.cursor = this.previousCursor;
@@ -187,6 +203,7 @@ export class HkgeocodeSession implements PanelModel {
       fillOpacity: this.state.fillOpacity,
       lineColor: this.state.lineColor,
       lineWidth: this.state.lineWidth,
+      labelColor: this.state.labelColor,
       showLabels: this.state.showLabels,
       includeNeighbors: this.state.includeNeighbors,
       includeParent: this.state.includeParent,
@@ -222,7 +239,7 @@ export class HkgeocodeSession implements PanelModel {
       status,
       statusWarn: this.limited,
       message: this.message,
-      selected: this.state.selectedCode ? describeCell(this.state.selectedCode) : null,
+      selected: this.state.selectedCode ? describeCell(this.state.selectedCode, this.hk80Point) : null,
     };
   }
 
@@ -242,27 +259,33 @@ export class HkgeocodeSession implements PanelModel {
 
   setFillColor(value: string): void {
     this.state.fillColor = value;
-    this.applyPaint();
+    this.paintFill();
   }
 
   setFillOpacity(value: number): void {
     this.state.fillOpacity = value;
-    this.applyPaint();
+    this.paintFill();
   }
 
   setLineColor(value: string): void {
     this.state.lineColor = value;
-    this.applyPaint();
+    this.paintLine();
   }
 
   setLineWidth(value: number): void {
     this.state.lineWidth = value;
+    this.paintLine();
+  }
+
+  setLabelColor(value: string): void {
+    this.state.labelColor = value;
     this.applyPaint();
   }
 
   setShowLabels(value: boolean): void {
     this.state.showLabels = value;
-    this.applyPaint();
+    this.pushLabels();
+    this.emit();
   }
 
   setIncludeNeighbors(value: boolean): void {
@@ -286,6 +309,7 @@ export class HkgeocodeSession implements PanelModel {
         this.state.length = code.length as CodeLength;
       }
       this.pendingFit = code;
+      this.hk80Point = hk80CellCenter(code);
       this.refreshGrid();
       this.pushSelection();
       this.flushPendingFit();
@@ -316,6 +340,8 @@ export class HkgeocodeSession implements PanelModel {
         nativeLayerIds: [],
         sourceIds: [],
         opacity: this.state.fillOpacity,
+        paintMode: "plugin",
+        metadata: { controlOwnsPaint: true },
         style: {
           fillColor: this.state.fillColor,
           strokeColor: this.state.lineColor,
@@ -368,6 +394,7 @@ export class HkgeocodeSession implements PanelModel {
     }
     try {
       this.state.selectedCode = hk80ToHkgeocode(projected[0], projected[1], this.currentLength());
+      this.hk80Point = { easting: projected[0], northing: projected[1] };
       this.message = null;
       this.pushSelection();
     } catch (error) {
@@ -408,6 +435,7 @@ export class HkgeocodeSession implements PanelModel {
       this.count = 0;
       this.limited = true;
     }
+    this.labels = labelsForZoom(this.collection, this.map.getZoom());
     this.ready = true;
     this.pushGrid();
     this.applyPaint();
@@ -420,6 +448,7 @@ export class HkgeocodeSession implements PanelModel {
     }
     const empty = EMPTY_COLLECTION;
     this.map.addSource(GRID_SOURCE, { type: "geojson", data: empty });
+    this.map.addSource(LABEL_SOURCE, { type: "geojson", data: empty });
     this.map.addSource(SELECTION_SOURCE, { type: "geojson", data: empty });
     this.map.addSource(NEIGHBOR_SOURCE, { type: "geojson", data: empty });
     this.map.addSource(PARENT_SOURCE, { type: "geojson", data: empty });
@@ -474,19 +503,20 @@ export class HkgeocodeSession implements PanelModel {
       this.map.addLayer({
         id: LABEL_LAYER,
         type: "symbol",
-        source: GRID_SOURCE,
+        source: LABEL_SOURCE,
         layout: {
           "text-field": ["get", "hkgeocode"],
-          "text-size": 12,
+          "text-size": LABEL_TEXT_SIZE,
           "text-font": pickTextFont(this.map),
-          // Other DGGS grids (Geohash, H3, …) also label cells. Stay out of
-          // their collision group so each plugin's ID toggle only affects itself.
+          "text-padding": Math.round(LABEL_TEXT_SIZE * 0.6),
+          // Stay out of the shared symbol collision group. Visibility is never
+          // toggled here: GeoLibre copies that property across DGGS id layers.
           "text-allow-overlap": true,
           "text-ignore-placement": true,
-          visibility: this.state.showLabels ? "visible" : "none",
+          visibility: "visible",
         },
         paint: {
-          "text-color": "#134e4a",
+          "text-color": this.state.labelColor,
           "text-halo-color": "#ffffff",
           "text-halo-width": 1.2,
         },
@@ -494,10 +524,21 @@ export class HkgeocodeSession implements PanelModel {
     } catch {
       // The basemap style has no glyphs for the fallback font. Outlines still draw.
     }
+    this.ownPaint();
   }
 
   private pushGrid(): void {
     setGeoJson(this.map, GRID_SOURCE, this.collection);
+    this.pushLabels();
+  }
+
+  /** The ID checkbox only swaps this source. It does not change any other grid's layout. */
+  private pushLabels(): void {
+    setGeoJson(
+      this.map,
+      LABEL_SOURCE,
+      this.state.showLabels ? this.labels : EMPTY_COLLECTION,
+    );
   }
 
   private pushSelection(): void {
@@ -522,21 +563,78 @@ export class HkgeocodeSession implements PanelModel {
     );
   }
 
-  private applyPaint(): void {
+  private paintFill(): void {
     if (!this.map.getLayer(FILL_LAYER)) {
       return;
     }
-    this.map.setPaintProperty(FILL_LAYER, "fill-color", this.state.fillColor);
-    this.map.setPaintProperty(FILL_LAYER, "fill-opacity", this.state.fillOpacity);
-    this.map.setPaintProperty(LINE_LAYER, "line-color", this.state.lineColor);
-    this.map.setPaintProperty(LINE_LAYER, "line-width", this.state.lineWidth);
-    if (this.map.getLayer(LABEL_LAYER)) {
-      this.map.setLayoutProperty(
-        LABEL_LAYER,
-        "visibility",
-        this.state.showLabels ? "visible" : "none",
-      );
+    this.painting = true;
+    try {
+      this.map.setPaintProperty(FILL_LAYER, "fill-color", this.state.fillColor);
+      this.map.setPaintProperty(FILL_LAYER, "fill-opacity", this.state.fillOpacity);
+    } finally {
+      this.painting = false;
     }
+  }
+
+  private paintLine(): void {
+    if (!this.map.getLayer(LINE_LAYER)) {
+      return;
+    }
+    this.painting = true;
+    try {
+      this.map.setPaintProperty(LINE_LAYER, "line-color", this.state.lineColor);
+      this.map.setPaintProperty(LINE_LAYER, "line-width", this.state.lineWidth);
+    } finally {
+      this.painting = false;
+    }
+  }
+
+  private applyPaint(): void {
+    this.paintFill();
+    this.paintLine();
+    if (this.map.getLayer(LABEL_LAYER)) {
+      this.map.setPaintProperty(LABEL_LAYER, "text-color", this.state.labelColor);
+    }
+  }
+
+  /** Fill and outline stay on their own layers, even if a DGGS style sync rewrites one of them. */
+  private restoreOwnPaint(): void {
+    if (this.painting || !this.map.getLayer(FILL_LAYER) || !this.map.getLayer(LINE_LAYER)) {
+      return;
+    }
+    if (!samePaint(this.map.getPaintProperty(FILL_LAYER, "fill-color"), this.state.fillColor)) {
+      this.paintFill();
+    } else if (
+      !samePaint(this.map.getPaintProperty(FILL_LAYER, "fill-opacity"), this.state.fillOpacity)
+    ) {
+      this.paintFill();
+    }
+    if (!samePaint(this.map.getPaintProperty(LINE_LAYER, "line-color"), this.state.lineColor)) {
+      this.paintLine();
+    } else if (
+      !samePaint(this.map.getPaintProperty(LINE_LAYER, "line-width"), this.state.lineWidth)
+    ) {
+      this.paintLine();
+    }
+  }
+
+  /** Tell GeoLibre this grid paints itself, so another plugin's colour action does not restyle it. */
+  private ownPaint(): void {
+    this.app.registerExternalNativeLayer?.({
+      id: OWNED_LAYER_ID,
+      name: "HKGeoCode",
+      nativeLayerIds: [FILL_LAYER, LINE_LAYER].filter((id) => this.map.getLayer(id)),
+      sourceIds: [GRID_SOURCE],
+      opacity: this.state.fillOpacity,
+      paintMode: "plugin",
+      metadata: { controlOwnsPaint: true },
+      style: {
+        fillColor: this.state.fillColor,
+        strokeColor: this.state.lineColor,
+        strokeWidth: this.state.lineWidth,
+        fillOpacity: this.state.fillOpacity,
+      },
+    });
   }
 
   /**
@@ -619,8 +717,17 @@ export class HkgeocodeSession implements PanelModel {
   }
 }
 
-function describeCell(code: string): SelectedCellView {
+function hk80CellCenter(code: string): { easting: number; northing: number } {
   const { easting, northing, cellSize } = hkgeocodeCellOrigin(code);
+  return { easting: easting + cellSize / 2, northing: northing + cellSize / 2 };
+}
+
+function describeCell(
+  code: string,
+  hk80Point: { easting: number; northing: number } | null,
+): SelectedCellView {
+  const { easting, northing, cellSize } = hkgeocodeCellOrigin(code);
+  const hk80 = hk80Point ?? hk80CellCenter(code);
   const center = projectToLngLat(easting + cellSize / 2, northing + cellSize / 2) ?? [0, 0];
   return {
     code,
@@ -630,9 +737,18 @@ function describeCell(code: string): SelectedCellView {
     neighbors: neighborCodes(code),
     easting,
     northing,
+    hk80Easting: hk80.easting,
+    hk80Northing: hk80.northing,
     lng: center[0],
     lat: center[1],
   };
+}
+
+function samePaint(actual: unknown, expected: string | number): boolean {
+  if (typeof expected === "number") {
+    return typeof actual === "number" && Math.abs(actual - expected) < 1e-6;
+  }
+  return typeof actual === "string" && actual.toLowerCase() === expected.toLowerCase();
 }
 
 function readLngLat(value: LngLatLike): { lng: number; lat: number } {

@@ -1,6 +1,6 @@
 {
   "name": "hkgeocode-geolibre-plugin",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "GeoLibre plugin that draws the Hong Kong geocode grid for the current map view.",
   "type": "module",
